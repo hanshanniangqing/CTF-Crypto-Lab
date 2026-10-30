@@ -21,7 +21,7 @@
 
 ### 方式一：免安装包（Windows，推荐给做题者）
 
-从 Releases 下载 `CTF-Crypto-Lab-v3.0-win64.zip`，解压到任意可写目录，双击：
+从 [Releases](https://gitcode.com/2401_88644935/CTF-Crypto-Lab/releases) 下载 `CTF-Crypto-Lab-v3.0-win64.zip`，解压到任意可写目录，双击：
 
 - `启动题目站.bat` → 浏览器打开题目站
 - `启动工具箱.bat` → 浏览器打开密码工具箱
@@ -32,7 +32,7 @@
 ### 方式二：从源码运行
 
 ```bash
-git clone <this-repo> && cd CTF-Crypto-Lab
+git clone https://gitcode.com/2401_88644935/CTF-Crypto-Lab.git && cd CTF-Crypto-Lab
 pip install -r requirements.txt        # pycryptodome 必需; rich/sympy 强烈推荐
 
 python ctf.py                          # 交互式菜单
