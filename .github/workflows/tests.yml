@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: 工具库单测 + 题目自洽验证
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install pycryptodome rich sympy cryptography
+      - name: 工具库单元测试
+        run: python tools/test_ctfk.py
+      - name: 生成题目材料
+        run: |
+          for f in tools/build_*.py; do
+            case "$f" in
+              *build_common.py|*build_readme.py) continue ;;
+            esac
+            python "$f" || exit 1
+          done
+      - name: 全部题目验证
+        run: python ctf.py check all
+
+  web:
+    name: Web 接口冒烟
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pycryptodome rich sympy
+      - name: 启动两个服务并检查
+        run: |
+          python ctf.py web --no-browser --port 8787 --toolkit-port 8788 &
+          sleep 6
+          curl -fsS http://127.0.0.1:8787/api/index | head -c 200
+          curl -fsS http://127.0.0.1:8788/api/tools | head -c 200
+          curl -fsS -X POST http://127.0.0.1:8787/api/verify/rsa-wiener \
+            -H 'Content-Type: application/json' -d '{"keep": false}' | head -c 300

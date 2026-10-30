@@ -1,0 +1,6 @@
+Textbook RSA signature checker (e = 3, no padding, no hash).
+Forge a signature: write the hex signature into sig.txt next to
+this file, then run:  python verify.py
+(format: hex)
+n = 984dea73c3cdb109e09e7bbca2b18f45767340896c6ec3bbe8353b5717e178fce3ccf006fdb6b5bb8b56c9ec4f1fc1028b13e65b8668336cd50e593a48d6f343d703201d58336882a712dda161936970ec89e118e2e86b2f11bd832ac1f23ce1fd5a3f5e002fd9754e910028e09490734c6121fac9b7078339767e0dba29dfcb
+e = 3

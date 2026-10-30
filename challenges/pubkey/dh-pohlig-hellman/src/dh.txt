@@ -1,0 +1,8 @@
+Diffie-Hellman 公开参数 (十六进制)
+==================================
+p = b4f665a1f5e99ee2017ffb69ac5ad69716723c12a58c0d58a8b2c209b16b42bb
+g = 2
+h = 3ec37b47b7b1d8573eba403455ab60444219f6cd6608821de354d4b8a3dbb4c4
+
+h = g^x mod p, x 是私钥 (其字节编码即 flag)。
+备注: 这次选的素数有点特别 —— p-1 是光滑的 (smooth)。

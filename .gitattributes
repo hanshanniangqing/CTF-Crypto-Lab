@@ -1,0 +1,9 @@
+# 统一文本换行（Windows 脚本保留 CRLF，其余用 LF）
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.bin binary
+*.zip binary
+*.exe binary
+*.pyd binary
+*.dll binary

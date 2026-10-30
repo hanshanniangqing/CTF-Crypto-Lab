@@ -1,0 +1,17 @@
+# high 32 bits (hex) of 16 consecutive outputs
+38df8029
+931e58d7
+5fa63393
+7a80e776
+68bed675
+8b4a9663
+64c2467f
+c9a73634
+a954d5ab
+3bea8899
+910db486
+7d36f2ab
+10cc1b6f
+6b671f3f
+4801b32e
+455448c3

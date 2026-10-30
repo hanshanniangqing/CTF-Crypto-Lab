@@ -1,0 +1,5 @@
+RSA whose two primes were generated in the same neighbourhood.
+(format: hex)
+n = b76578b323ecabf41141cb0b88dcfa8f87d30b91a8a2abd32f132f4fe892810ccd63c932320607b2cd1985c66e3b5bcba304b52419934eb75fcf964435a51121
+e = 10001
+c = 6d1f15911132a80b252aef3e1afc69f744cdfc05e54ff915812adc31447d81cca830e4ae2fad8dcf2ce6a6433cb9907905a796487fb7203debb41a4a004b7600

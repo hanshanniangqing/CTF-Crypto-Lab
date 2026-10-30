@@ -1,0 +1,3 @@
+# double-DES ciphertext of the flag
+# (flag padded with NUL bytes to a multiple of 8, encrypted blockwise)
+target = d2407bbfc1e7f848274777b5e4c671d49f1ab8f6a103aa53829978fc7669febb

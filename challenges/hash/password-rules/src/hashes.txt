@@ -1,0 +1,7 @@
+# 泄露的口令哈希 (MD5, 无盐)
+# 格式: <32位小写md5>  <用户名>
+1865b929ff346a681d79bcdf7299386c  user1
+ec4693d7437c8771080c41aefa52c3d3  user2
+08922834c74f25af2bb3b8356d9470a2  user3
+3fa63c136b2073e0fae37cb438673b45  user4
+8948227488d24b07ec9d107d6c41ac9e  user5 (admin)

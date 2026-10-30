@@ -1,0 +1,16 @@
+LCG output capture
+generator: x_next = (a * x + c) mod m   (full 64-bit values)
+8 consecutive outputs (decimal):
+
+o1 = 2210079970259772299
+o2 = 6198042892186212588
+o3 = 4621757422560933917
+o4 = 6287919036167545057
+o5 = 7317403217533179899
+o6 = 8218389949507909751
+o7 = 8227228973004401779
+o8 = 13812066279874292349
+
+note: the NEXT 4 outputs, each written as an 8-byte big-endian
+integer and concatenated, form a 32-byte pad. XOR that pad with
+mask.txt (hex, in this directory) to get the flag (strip NULs).

@@ -1,0 +1,13 @@
+# 必需
+pycryptodome>=3.15
+
+# 可选（强烈推荐）：终端富文本界面（表格 / 进度条 / 交互菜单）；未安装时自动降级为纯文本
+rich>=13.0
+
+# 可选：lib/ctfk.py 的 LLL 会优先使用 sympy 加速
+sympy>=1.10
+
+# 外部资源（不随仓库分发，由 `python ctf.py doctor` 自动探测本机）：
+#   John the Ripper (jumbo)        — cracking 分类 4 题依赖
+#   rockyou.txt                    — cracking 分类 4 题依赖
+#   7-Zip / openssl / ssh-keygen   — 仅重新生成出题材料时需要

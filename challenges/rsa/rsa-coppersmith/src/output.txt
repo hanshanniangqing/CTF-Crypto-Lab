@@ -1,0 +1,7 @@
+RSA side-channel leak: the high bits of the prime p are known.
+# p_high = p >> 48, i.e. the low 48 bits of p are unknown
+(format: hex)
+n       = a07db21a39f3875fdce63696055df2d1df2c15a1d3d4e655218cb68ff621347f61d0399b14103871
+e       = 10001
+c       = 8b98ae97b9c2e6d0a063518c4801a4fe9e732f1c4bdb3f2c8d727cb92ea48a449d4e6b2cfb278ac7
+p_high  = a551543ddba0512ddb3d1320b056

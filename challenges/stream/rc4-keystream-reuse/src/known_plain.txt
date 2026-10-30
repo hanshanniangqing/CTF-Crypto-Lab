@@ -1,0 +1,1 @@
+SESSION LOG v2.3|user=guest|ts=2026-10-25T09:00:00|action=login|

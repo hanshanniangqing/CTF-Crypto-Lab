@@ -1,0 +1,6 @@
+# double-DES sample: ct = E_k2(E_k1(pt)), DES-ECB, 8-byte blocks
+# pt is the ASCII text 'ATTACKATDAWN' zero-padded to 16 bytes
+# weak key space: key(i) = i.to_bytes(2, 'big') + b'\x00' * 6,
+#                 i in [0, 65536)  (only 16 bits of entropy per key)
+pt = 41545441434b41544441574e00000000
+ct = 4fe978222a6ecdca3e15a7aeae4fa047

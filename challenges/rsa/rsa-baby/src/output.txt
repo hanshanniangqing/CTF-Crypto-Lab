@@ -1,0 +1,5 @@
+RSA with a tiny 80-bit modulus. Have fun.
+(format: hex)
+n = b05e2c105f5f64629253
+e = 10001
+c = 6ea741b654dcbdb5cb5b

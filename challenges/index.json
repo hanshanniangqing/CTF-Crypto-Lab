@@ -1,0 +1,641 @@
+{
+  "challenges": [
+    {
+      "name": "base-nested",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 50,
+      "technique": "Base16/32/64/85 嵌套编码识别",
+      "description": "一份层层包裹的密文，剥开所有编码外壳就能看到 flag。",
+      "hints": [
+        "每一层都是常见编码：hex / base32 / base64 / ascii85 之一。",
+        "用 ctfk.try_decode_layers 可以自动剥壳。"
+      ],
+      "flag": "flag{b4se_r4bb1t_h0le}",
+      "timeout": 120
+    },
+    {
+      "name": "caesar-rot",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 50,
+      "technique": "凯撒密码爆破 + 英文评分",
+      "description": "一封被凯撒移位加密的信件，只有 25 种可能的钥匙。",
+      "hints": [
+        "移位只有 25 种，全部试一遍。",
+        "用卡方评分 (ctfk.chi2_english) 自动挑出最像英文的移位。"
+      ],
+      "flag": "flag{caesar_was_not_so_smart}",
+      "timeout": 120
+    },
+    {
+      "name": "vigenere-classic",
+      "category": "classical",
+      "difficulty": "简单",
+      "points": 100,
+      "technique": "重合指数 (IC) 求密钥长度 + 卡方逐列破解",
+      "description": "一段维吉尼亚密文，密钥长度未知。经典统计攻击的标准练习。",
+      "hints": [
+        "先用重合指数确定密钥长度 (2~16 之间)。",
+        "密钥确定后逐列做卡方统计还原字母。"
+      ],
+      "flag": "flag{vigenere_cracked_by_ic}",
+      "timeout": 120
+    },
+    {
+      "name": "substitution-hillclimb",
+      "category": "classical",
+      "difficulty": "中等",
+      "points": 200,
+      "technique": "单表替代密码 + bigram 爬山算法",
+      "description": "单表替代密码，密文足够长。 frequency analysis 与爬山法的实战。",
+      "hints": [
+        "用英文语料构建 bigram 模型 (ctfk.BigramModel)。",
+        "随机初始映射 + 交换两个字母的爬山法，多重启几次取最优。"
+      ],
+      "flag": "flag{substitution_down_you_go}",
+      "timeout": 240
+    },
+    {
+      "name": "affine-brute",
+      "category": "classical",
+      "difficulty": "简单",
+      "points": 100,
+      "technique": "仿射密码密钥空间爆破",
+      "description": "仿射密码只有 312 个密钥 (a 与 26 互素, b 任意)，暴力即可。",
+      "hints": [
+        "a 必须与 26 互素，合法密钥共 12×26=312 个。",
+        "对每个密钥解密后用英文评分挑最优。"
+      ],
+      "flag": "flag{affine_312_ways_to_fail}",
+      "timeout": 120
+    },
+    {
+      "name": "playfair-keysearch",
+      "category": "classical",
+      "difficulty": "中等",
+      "points": 200,
+      "technique": "Playfair 密码 + 字典密钥爆破",
+      "description": "Playfair 加密的消息。密钥是从词典里选的一个常见单词。",
+      "hints": [
+        "密钥在项目自带的常用词表 lib/data/wordlist.txt 里。",
+        "对每个候选词构造方阵解密，按英文评分排序。"
+      ],
+      "flag": "flag{playfairsquarehunt}",
+      "timeout": 240
+    },
+    {
+      "name": "hill-knownpt",
+      "category": "classical",
+      "difficulty": "中等",
+      "points": 200,
+      "technique": "Hill 密码已知明文攻击 (模 26 线性方程组)",
+      "description": "Hill 密码的部分明密文对泄露了。解一个模 26 的线性方程组即可恢复密钥矩阵。",
+      "hints": [
+        "密文块 = 明文块 × K (mod 26)。",
+        "用高斯消元 mod 26 求解 (注意主元要与 26 互素)。"
+      ],
+      "flag": "flag{hillcipherlinearized}",
+      "timeout": 120
+    },
+    {
+      "name": "aes-key-from-secret",
+      "category": "symmetric",
+      "difficulty": "入门",
+      "points": 75,
+      "technique": "密钥派生弱点 (key = MD5(用户名))",
+      "description": "加密程序把 AES 密钥派生自一个可枚举的用户名。配置泄露文件给出了候选名单。",
+      "hints": [
+        "key = MD5(b\"key:\" + username)[:16]。",
+        "候选用户名在 leaked-config.ini 里，逐个试。"
+      ],
+      "flag": "flag{keys_from_usernames_bad}",
+      "timeout": 120
+    },
+    {
+      "name": "des-mitm",
+      "category": "symmetric",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "双重 DES 中间相遇攻击 (MITM)",
+      "description": "2DES 加密 (密钥各只有 16 位熵)。用中间相遇攻击代替 2^32 暴力。",
+      "hints": [
+        "对已知明文：枚举 k1 建 E_k1(pt) 表，再枚举 k2 算 D_k2(ct) 找碰撞。",
+        "两组密钥各 65536 种，内存换时间。"
+      ],
+      "flag": "flag{meet_in_the_middle_2des}",
+      "timeout": 240
+    },
+    {
+      "name": "cbc-bitflip",
+      "category": "symmetric",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "CBC 模式 IV 比特翻转",
+      "description": "服务端用 CBC 模式的加密令牌判断身份。无需密钥，翻转 IV 的比特就能改写第一个明文块。",
+      "hints": [
+        "CBC 解密时 P1 = D(C1) XOR IV，翻转 IV 的第 i 位会翻转 P1 的第 i 位。",
+        "把第一块明文中的 USER=guest 改成 USER=admin 需要翻转哪些位? 自己推。"
+      ],
+      "flag": "flag{flip_bits_not_tables}",
+      "timeout": 180
+    },
+    {
+      "name": "ecb-byte-at-a-time",
+      "category": "symmetric",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "ECB 模式逐字节爆破 (chosen plaintext)",
+      "description": "服务端把你的输入拼接在 flag 前面后用 AES-ECB 加密返回。让 ECB 的确定性出卖它自己。",
+      "hints": [
+        "构造输入使目标字节恰好位于某块末尾，再枚举 256 种可能匹配密文块。",
+        "注意服务器有固定长度前缀，先对齐块边界。"
+      ],
+      "flag": "flag{ecb_oracle_penguin_party}",
+      "timeout": 300
+    },
+    {
+      "name": "padding-oracle",
+      "category": "symmetric",
+      "difficulty": "困难",
+      "points": 350,
+      "technique": "CBC Padding Oracle 攻击",
+      "description": "服务端解密 CBC 密文时会告诉你 padding 是否合法。这个一比特的预言机足以解密全部密文。",
+      "hints": [
+        "从最后一个块开始，逐字节恢复中间值 I_i = D(C_i)：构造 IV 使 padding 恰好有效。",
+        "已知后缀时，让倒数第二个字节翻转来试探；每次最多 256 个查询。"
+      ],
+      "flag": "flag{padding_oracle_padawan_no_more}",
+      "timeout": 300
+    },
+    {
+      "name": "rc4-keystream-reuse",
+      "category": "stream",
+      "difficulty": "简单",
+      "points": 100,
+      "technique": "RC4 密钥流重用",
+      "description": "两条消息用了同一个 RC4 密钥。其中一条的明文是已知的日志头。",
+      "hints": [
+        "keystream = ct1 XOR pt1。",
+        "flag_msg = ct2 XOR keystream。"
+      ],
+      "flag": "flag{rc4_never_reuse_keystream}",
+      "timeout": 120
+    },
+    {
+      "name": "xor-repeating-key",
+      "category": "stream",
+      "difficulty": "中等",
+      "points": 200,
+      "technique": "重复密钥 XOR: 汉明距离猜密钥长度 + 频率分析",
+      "description": "经典 cryptopals 风格：一长段被重复密钥 XOR 过的英文文本。",
+      "hints": [
+        "用汉明距离估计密钥长度 (2~40)。",
+        "按密钥长度分列，每列做单字节 XOR 频率分析。"
+      ],
+      "flag": "flag{repeating_key_repeating_pain}",
+      "timeout": 240
+    },
+    {
+      "name": "lcg-recover",
+      "category": "stream",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "LCG 参数恢复 (gcd + 求逆)",
+      "description": "随机数由线性同余生成器产生，给出了 8 个连续输出。恢复参数并预测后面的输出。",
+      "hints": [
+        "m 整除 t_{i+2}·t_i - t_{i+1}²，对多个 i 求 gcd。",
+        "a = (x2-x1)·inv(x1-x0) mod m。"
+      ],
+      "flag": "flag{lcg_parameters_leaked}",
+      "timeout": 120
+    },
+    {
+      "name": "lcg-truncated",
+      "category": "stream",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "截断 LCG 状态恢复 (格 / Babai)",
+      "description": "LCG 的参数已知，但每个输出只泄露了高 32 位。用格密码学把丢失的低位找回来。",
+      "hints": [
+        "未知低位很小 → 这是一个 CVP：l_i = a^i·l_0 + d_i (mod m)。",
+        "ctfk.solve_lcg_truncated 就是现成的工具。"
+      ],
+      "flag": "flag{truncated_but_not_forgotten}",
+      "timeout": 240
+    },
+    {
+      "name": "mt19937-clone",
+      "category": "stream",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "MT19937 状态克隆 (untemper)",
+      "description": "拿走了 MT19937 的 624 个连续输出，就等于拿走了它的全部未来。",
+      "hints": [
+        "对每个输出做 untemper 恢复内部状态。",
+        "克隆生成器后继续输出即为密钥流。"
+      ],
+      "flag": "flag{untwister_of_fates}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-baby",
+      "category": "rsa",
+      "difficulty": "入门",
+      "points": 75,
+      "technique": "小模数因式分解 (Pollard rho)",
+      "description": "一个只有 80 bit 的 RSA 模数。n 都这么小了，还要什么量子计算机。",
+      "hints": [
+        "ctfk.factorint 或 sympy.factorint 都能秒解。",
+        "拿到 p,q 后标准 RSA 解密。"
+      ],
+      "flag": "flag{f4ct0r_1t}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-common-modulus",
+      "category": "rsa",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "共模攻击 (gcd(e1,e2)=1)",
+      "description": "同一条消息用同一个模数、两个不同的指数加密。扩展欧几里得的舞台。",
+      "hints": [
+        "找 a,b 使 a·e1 + b·e2 = 1。",
+        "m = c1^a · c2^b mod n (注意负指数用模逆)。"
+      ],
+      "flag": "flag{two_keys_one_plaintext}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-broadcast",
+      "category": "rsa",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "Håstad 广播攻击 (e=3, CRT + 立方根)",
+      "description": "同一条消息发给三个人，e=3 且不填充。中国剩余定理 + 开立方。",
+      "hints": [
+        "CRT 合并三个密文后得到 m³ (在整数意义下)。",
+        "用 ctfk.iroot 开整数立方根。"
+      ],
+      "flag": "flag{hastad_broadcasts_everything}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-small-e",
+      "category": "rsa",
+      "difficulty": "入门",
+      "points": 100,
+      "technique": "小指数无填充 (直接开 e 次方根)",
+      "description": "e=3, 消息短到 m³ < n。没有填充的 RSA 就像没有锁的门。",
+      "hints": [
+        "m³ < n 意味着模运算根本没有生效。",
+        "ctfk.iroot(c, 3) 然后转回字节。"
+      ],
+      "flag": "flag{small_e_big_problem}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-shared-prime",
+      "category": "rsa",
+      "difficulty": "简单",
+      "points": 100,
+      "technique": "共享素数 (gcd 分解两个模数)",
+      "description": "系统管理员批量生成密钥时忘了换随机种子。两个模数共享一个素数。",
+      "hints": [
+        "gcd(n1, n2) 就是那个共享素数。"
+      ],
+      "flag": "flag{gcd_is_your_friend}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-fermat",
+      "category": "rsa",
+      "difficulty": "中等",
+      "points": 200,
+      "technique": "Fermat 分解 (相近素数)",
+      "description": "p 和 q 由同一个随机源附近取值生成，距离近得可以被 Fermat 方法分解。",
+      "hints": [
+        "从 ceil(sqrt(n)) 开始向上找 a，检查 a²-n 是否为完全平方数。",
+        "ctfk.fermat_factor 一行搞定。"
+      ],
+      "flag": "flag{fermat_finds_close_primes}",
+      "timeout": 180
+    },
+    {
+      "name": "rsa-wiener",
+      "category": "rsa",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "Wiener 攻击 (小私钥指数, 连分数)",
+      "description": "为了加密速度，d 被选得很小。连分数展开 e/n 会把它吐出来。",
+      "hints": [
+        "e/n 的连分数渐近分数中藏着 k/d。",
+        "ctfk.wiener(e, n) 直接返回 d。"
+      ],
+      "flag": "flag{wiener_saw_your_small_d}",
+      "timeout": 120
+    },
+    {
+      "name": "rsa-lsb-oracle",
+      "category": "rsa",
+      "difficulty": "困难",
+      "points": 350,
+      "technique": "RSA 最低位预言机 (二分恢复明文)",
+      "description": "解密服务只愿意告诉你明文的最后一位。1024 次询问后，它就等于告诉你了一切。",
+      "hints": [
+        "c·2^e 的解密结果的 LSB 揭示 m·2 mod n 的落点，二分区间。",
+        "共需约 log2(n) 次查询。"
+      ],
+      "flag": "flag{one_bit_at_a_time}",
+      "timeout": 300
+    },
+    {
+      "name": "rsa-franklin-reiter",
+      "category": "rsa",
+      "difficulty": "中等",
+      "points": 300,
+      "technique": "Franklin-Reiter 相关消息攻击 (多项式 gcd)",
+      "description": "e=3，两条消息只差 1。两个密文的最大公因式就是那条线性消息。",
+      "hints": [
+        "gcd(x³-c1, (x+1)³-c2) mod n 是一次多项式。",
+        "ctfk.poly_gcd_modn 可以直接用。"
+      ],
+      "flag": "flag{related_messages_gcd}",
+      "timeout": 240
+    },
+    {
+      "name": "rsa-coppersmith",
+      "category": "rsa",
+      "difficulty": "困难",
+      "points": 400,
+      "technique": "Coppersmith 已知 p 高位分解",
+      "description": "侧信道泄露了素数 p 的大部分高位比特。Coppersmith 方法能补全剩下的部分。",
+      "hints": [
+        "f(x) = p_high + x, x < 2^48, 用 ctfk.small_roots。",
+        "m=3, t=3 的格参数足够了。"
+      ],
+      "flag": "flag{known_bits_known_destiny}",
+      "timeout": 300
+    },
+    {
+      "name": "rsa-sign-forgery",
+      "category": "rsa",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "e=3 无填充签名伪造 (立方根)",
+      "description": "一个用 \"教科书式 RSA\" 直接签名的验证器。消息尾部可控时，签名只是个立方根。",
+      "hints": [
+        "找 m' = m·256^k 使 m'^3 < n，签名 = 立方根。",
+        "验证器只检查签名立方后的字节前缀。"
+      ],
+      "flag": "flag{cube_root_signature}",
+      "timeout": 120
+    },
+    {
+      "name": "dsa-nonce-reuse",
+      "category": "pubkey",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "DSA 随机数 k 重用",
+      "description": "两条不同的消息签名用了同一个 k。索尼 PS3 的悲剧在这里重演。",
+      "hints": [
+        "k = (h1-h2)/(s1-s2) mod q。",
+        "x = (s1·k - h1)/r1 mod q。"
+      ],
+      "flag": "flag{k_reuse_is_key_abuse}",
+      "timeout": 120
+    },
+    {
+      "name": "dsa-biased-nonce",
+      "category": "pubkey",
+      "difficulty": "困难",
+      "points": 400,
+      "technique": "DSA 随机数高位泄露 (格攻击 HNP)",
+      "description": "随机数生成器有毛病：每个 k 的高 32 位都是 0。足够多的签名可以把私钥格出来。",
+      "hints": [
+        "把 s·k = h + r·x 改写成 HNP 的标准形式。",
+        "ctfk.solve_hnp 直接可用。"
+      ],
+      "flag": "flag{biased_nonces_tell_secrets}",
+      "timeout": 300
+    },
+    {
+      "name": "elgamal-malleable",
+      "category": "pubkey",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "ElGamal 同态可塑性",
+      "description": "解密预言机拒绝解密原始密文，但它没防住乘法同态。把密文翻倍再问它。",
+      "hints": [
+        "(c1, c2) 解密为 m；请求 (c1, 2·c2) 得到 2m。",
+        "别忘了模逆回去。"
+      ],
+      "flag": "flag{malleable_by_design}",
+      "timeout": 120
+    },
+    {
+      "name": "dh-pohlig-hellman",
+      "category": "pubkey",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "光滑阶群上的 Pohlig-Hellman 离散对数",
+      "description": "Diffie-Hellman 的素数选得太\"光滑\"了。p-1 的因子都很小，离散对数被逐个击破。",
+      "hints": [
+        "分解 p-1 (全是小因子)。",
+        "ctfk.pohlig_hellman(g, h, p, factors)。"
+      ],
+      "flag": "flag{smooth_primes_smooth_break}",
+      "timeout": 240
+    },
+    {
+      "name": "ecc-pohlig-hellman",
+      "category": "pubkey",
+      "difficulty": "困难",
+      "points": 350,
+      "technique": "椭圆曲线光滑阶离散对数 (超奇异曲线)",
+      "description": "一条阶被精心\"构造\"得非常光滑的椭圆曲线。ECDLP 在这样的曲线上形同虚设。",
+      "hints": [
+        "曲线是超奇异的: p ≡ 2 (mod 3), 阶 = p+1。",
+        "ctfk.EC.ec_pohlig 一把梭。"
+      ],
+      "flag": "flag{3cc_p0hlig}",
+      "timeout": 240
+    },
+    {
+      "name": "md5-collision",
+      "category": "hash",
+      "difficulty": "入门",
+      "points": 100,
+      "technique": "MD5 碰撞 (前缀碰撞性质)",
+      "description": "两个文件 MD5 相同。利用已知碰撞块，构造出 MD5 相同但内容与 SHA256 都不同的新文件对。",
+      "hints": [
+        "lib/data/ 里有现成的碰撞样本。",
+        "MD5 碰撞块后面追加相同的尾巴，MD5 仍然相同 (differential path 性质)。"
+      ],
+      "flag": "flag{md5_collision_classic}",
+      "timeout": 180
+    },
+    {
+      "name": "md5-length-extension",
+      "category": "hash",
+      "difficulty": "中等",
+      "points": 300,
+      "technique": "MD5 长度扩展攻击 (secret-prefix MAC)",
+      "description": "MAC = MD5(secret || message)。知道 message 和 MAC，就能追加任意内容并伪造新 MAC。",
+      "hints": [
+        "爆破 secret 的长度 (8~32 字节)。",
+        "ctfk.md5_lenext(digest, prefix_len, suffix) 返回现成的 appendix 和新 MAC。"
+      ],
+      "flag": "flag{glue_padding_sticks}",
+      "timeout": 240
+    },
+    {
+      "name": "password-rules",
+      "category": "hash",
+      "difficulty": "简单",
+      "points": 100,
+      "technique": "字典攻击 + 规则变形 (hashcat 思路)",
+      "description": "五个 MD5 口令哈希。口令都是常见单词加一点规则变形 (大写/追加年份/leet)。",
+      "hints": [
+        "词表在 lib/data/wordlist.txt。",
+        "规则: 首字母大写、尾部追加 1900~2030 的年份、常见 leet 替换 (a→4, e→3, o→0, s→$, i→1)。"
+      ],
+      "flag": "flag{p@$$w0rd2026}",
+      "timeout": 240
+    },
+    {
+      "name": "crc32-forgery",
+      "category": "hash",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "CRC32 线性性伪造 (GF(2) 解方程)",
+      "description": "\"校验和相等\"不等于\"内容相同\"。修改文件内容并保持 CRC32 不变。",
+      "hints": [
+        "CRC32 对比特是 GF(2) 线性的，4 字节后缀即可打到任意目标值。",
+        "ctfk.crc32_patch(prefix, target) 返回需要的后缀。"
+      ],
+      "flag": "flag{crc32_is_not_a_hash}",
+      "timeout": 120
+    },
+    {
+      "name": "knapsack-merkle-hellman",
+      "category": "lattice",
+      "difficulty": "中等",
+      "points": 300,
+      "technique": "Merkle-Hellman 背包 (CJLOSS 格攻击)",
+      "description": "教科书上的第一个公钥密码，死于 LLL。每个字节一个背包，密度低到一破到底。",
+      "hints": [
+        "每个字节是独立的低密度子集和问题 (密度 ≈ 0.89)。",
+        "CJLOSS 格: 行 i = (2e_i, 2·pub_i), 末行 = (1,...,1, 2·sum)。"
+      ],
+      "flag": "flag{knapsack_low_density}",
+      "timeout": 300
+    },
+    {
+      "name": "hnp-hidden-number",
+      "category": "lattice",
+      "difficulty": "困难",
+      "points": 400,
+      "technique": "隐数问题 HNP (Boneh-Venkatesan 格)",
+      "description": "一个侧信道持续泄露某个秘密在随机掩码下的高 32 位。14 个样本足够把整个秘密格出来。",
+      "hints": [
+        "方程: a_i·x - e_i ≡ c_i (mod p), |e_i| < 2^224。",
+        "这就是 ctfk.solve_hnp 的标准输入。"
+      ],
+      "flag": "flag{hidden_number_found}",
+      "timeout": 300
+    },
+    {
+      "name": "lwe-toy",
+      "category": "lattice",
+      "difficulty": "专家",
+      "points": 500,
+      "technique": "LWE 小规模原语攻击 (对偶/嵌入格)",
+      "description": "一个玩具级的 Regev 加密 (q=251, n=6, 小噪声)。用格攻击恢复密钥，再解出 flag。",
+      "hints": [
+        "把 (e, s) 一起放进 Kannan 嵌入格: [[q·I, 0], [Aᵀ, I]] + 目标行。",
+        "噪声极小且维度低，LLL 足以找到它。"
+      ],
+      "flag": "flag{lattice_cryptography_101}",
+      "timeout": 300
+    },
+    {
+      "name": "ntlm-crack",
+      "category": "cracking",
+      "difficulty": "入门",
+      "points": 100,
+      "technique": "NTLM 哈希字典破解 (John the Ripper + rockyou)",
+      "description": "一次内网渗透的战利品: 6 个本地账户的 NTLM 哈希。用 rockyou 字典把口令全部找回来。",
+      "hints": [
+        "john --format=NT --wordlist=<rockyou路径> <哈希文件>",
+        "没有 John? NTLM = MD4(UTF-16LE(口令)), 纯 Python 也能枚举字典。",
+        "flag = Administrator 账户的口令, 套上 flag{}。"
+      ],
+      "flag": "flag{trustno1}",
+      "timeout": 300,
+      "requires": [
+        "john",
+        "rockyou"
+      ]
+    },
+    {
+      "name": "zip-crack",
+      "category": "cracking",
+      "difficulty": "简单",
+      "points": 150,
+      "technique": "ZipCrypto 传统加密压缩包破解 (zip2john + john)",
+      "description": "从员工邮箱附件抢救出的加密压缩包, 传统 ZipCrypto 加密, 口令很弱。",
+      "hints": [
+        "zip2john.exe leaked.zip > hash.txt 生成 john 格式。",
+        "john --wordlist=<rockyou> hash.txt, 破解后 john --show hash.txt 查看口令。",
+        "拿到口令后用任意解压工具 (或 Python zipfile) 读出 flag.txt。"
+      ],
+      "flag": "flag{zipcracked_with_john}",
+      "timeout": 300,
+      "requires": [
+        "john",
+        "rockyou",
+        "sevenzip"
+      ]
+    },
+    {
+      "name": "ssh-key-crack",
+      "category": "cracking",
+      "difficulty": "中等",
+      "points": 250,
+      "technique": "加密 SSH 私钥破解 (ssh2john + john)",
+      "description": "离职运维留在跳板机上的加密 RSA 私钥 (传统 PEM, DES-EDE3-CBC)。破解口令恢复私钥, 再用它解开用该公钥加密的挑战文件。",
+      "hints": [
+        "ssh2john.py id_rsa > hash.txt (john 的 run 目录里有这个脚本)。",
+        "john --wordlist=<rockyou路径> hash.txt。",
+        "拿到口令后: ctfk.pem_decrypt(open('id_rsa').read(), 口令) 恢复私钥,",
+        "再用 RSA-OAEP 解密 challenge.txt (hex) 即得 flag。"
+      ],
+      "flag": "flag{p3m_k3y_n0_m0r3}",
+      "timeout": 300,
+      "requires": [
+        "john",
+        "rockyou"
+      ]
+    },
+    {
+      "name": "shadow-crack",
+      "category": "cracking",
+      "difficulty": "中等",
+      "points": 300,
+      "technique": "sha512crypt 口令破解 (unshadow 场景, $6$)",
+      "description": "一次失误的备份把 /etc/shadow 带了出来。3 个可登录账户, 口令都来自常见字典。",
+      "hints": [
+        "用 unshadow 把 passwd.txt 与 shadow.txt 合并 (也可以直接喂 shadow.txt)。",
+        "john --wordlist=<rockyou> shadow.txt ($6$ 格式 john 自动识别)。",
+        "flag = 3 个口令按用户名字典序 (root, deploy, svc-legacy → deploy, root, svc-legacy) 排序后的中间值, 套上 flag{}。"
+      ],
+      "flag": "flag{sha512_slain}",
+      "timeout": 300,
+      "requires": [
+        "john",
+        "rockyou"
+      ]
+    }
+  ]
+}

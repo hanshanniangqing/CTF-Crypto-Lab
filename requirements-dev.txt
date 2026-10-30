@@ -1,0 +1,3 @@
+# 开发/打包依赖 (做题只需 requirements.txt)
+-r requirements.txt
+pyinstaller>=6.0

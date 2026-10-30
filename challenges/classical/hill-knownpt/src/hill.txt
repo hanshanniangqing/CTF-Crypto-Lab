@@ -1,0 +1,13 @@
+Hill cipher, 3x3 key matrix over Z_26 (a=0 ... z=25).
+Encryption: ct_block = pt_block * K (mod 26); each block is 3 letters.
+
+Known plaintext / ciphertext pairs (4 blocks):
+
+pt=res ct=jet
+pt=orc ct=qsv
+pt=onv ct=hpx
+pt=ers ct=wet
+
+Ciphertext whose plaintext contains the flag (9 blocks):
+
+ct=xsw acx vgc vtt rtr cwj gmp qlr ehs

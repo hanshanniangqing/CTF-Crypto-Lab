@@ -1,0 +1,45 @@
+"""题解：dsa-nonce-reuse
+## 漏洞点
+DSA 每次签名必须使用新鲜的随机数 k。本题两条消息的签名重用了同一个 k，
+而签名方程 s = k^{-1}(h + x·r) mod q 中 r 由 k 唯一决定——附件里两条签名
+的 r 完全相同就是铁证。两条签名方程相减可消去私钥 x 先解出 k，再代回任意
+一条即可解出 x。2010 年索尼 PS3 仍在用静态 k 签名，其密钥就是这样被恢复的。
+
+## 利用思路
+1. 从 sigs.json 读出两条签名 (h1, r, s1) 与 (h2, r, s2)，r 相同证实 k 重用。
+2. s1 - s2 = k^{-1}(h1 - h2) mod q，故 k = (h1-h2)·(s1-s2)^{-1} mod q。
+3. 代回第一条方程：x = (s1·k - h1)·r^{-1} mod q。
+4. x 即私钥（本题中就是 flag 的整数编码），long_to_bytes 还原成字符串。
+
+## 关键代码
+k = (h1 - h2) * modinv(s1 - s2, q) % q
+x = (s1 * k - h1) * modinv(r, q) % q
+print(l2b(x).decode())
+
+## 防御建议
+- k 必须由密码学安全 RNG 在每次签名时重新生成，任何形式的复用都是致命的。
+- 使用 RFC 6979 确定性 nonce（由私钥与消息共同派生），既免疫 RNG 缺陷又绝不重用。
+- 部署侧监控重复 r 值：同一公钥下出现相同 r 即说明 k 重用，应立即轮换密钥。
+"""
+import json
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(ROOT / "lib"))
+import ctfk
+
+
+def main():
+    params = json.load(open("params.json"))
+    sigs = json.load(open("sigs.json"))
+    q = params["q"]
+    h1, r, s1 = sigs[0]["h"], sigs[0]["r"], sigs[0]["s"]
+    h2, s2 = sigs[1]["h"], sigs[1]["s"]
+    k = (h1 - h2) * ctfk.modinv(s1 - s2, q) % q
+    x = (s1 * k - h1) * ctfk.modinv(r, q) % q
+    print(ctfk.l2b(x).decode())
+
+
+if __name__ == "__main__":
+    main()

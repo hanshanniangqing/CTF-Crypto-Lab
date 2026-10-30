@@ -1,0 +1,76 @@
+CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
+==================================================
+
+【怎么用】
+  双击  启动题目站.bat      → 自动打开浏览器，进入题目站（http://127.0.0.1:8787）
+  双击  启动工具箱.bat      → 自动打开浏览器，进入密码工具箱（http://127.0.0.1:8788）
+  双击  CTF-Crypto-Lab.exe  → 同时启动两者并打开题目站
+
+  关闭：直接关掉黑色控制台窗口（或在该窗口按 Ctrl+C）。
+  若默认端口被占用，程序会自动顺延到下一个空闲端口，并在窗口里打印实际地址。
+
+【这是什么】
+  44 道密码学 CTF 题，覆盖古典密码 / 对称 / 流密码 / RSA / 公钥与离散对数 /
+  哈希 / 格密码 / 口令破解实战。每题都有：玩家附件、参考题解、中文 writeup。
+  另有 38 个工具的密码工具箱（编码、古典、XOR、哈希、RSA 攻击、PRNG、格攻击）。
+
+【在题目站里做题】
+  概览 → 查看总分与分类进度，“领取全部题目”把附件复制到 dist/。
+  题目库 → 搜索 / 难度筛选 / 按分值排序，点卡片进入完整题面页。
+  题面页 → 描述、附件在线预览与下载、分步提示（逐条揭示）、题解、验证。
+
+【“验证”是干什么的】
+  验证只用来确认「题目材料 + 参考题解」自洽，不记录你的做题进度。
+  点击后依次显示：
+    ① 创建实例目录   附件复制到 instances/verify/<题目>/（勾选“保留实例”则不删除）
+    ② 启动参考题解   在该目录运行 solution/solve.py，命令原样展示
+    ③ 运行完成       退出码与耗时
+    ④ 提取 flag      从脚本输出里抓 flag{...}
+    ⑤ 与标准答案比对 与题目注册表里的答案逐字比较
+    ⑥ 清理 / 保留    默认删除临时实例
+  「查看参考脚本」有剧透确认；「打开实例目录」直接跳到磁盘现场。
+
+【服务型题目（会分配端口）】
+  带 server.py 的题（padding-oracle、cbc-bitflip、ecb-byte-at-a-time、
+  rsa-lsb-oracle、md5-length-extension）在“验证”页有「启动实例」按钮：
+  启动后显示端口、READY 行、实例目录、启动命令与连接方式，例如
+      nc 127.0.0.1 61155
+  自己写客户端攻击，完成后点「停止实例」。实例脚本在 instances/server/<题目>/。
+  elgamal-malleable 的 oracle.py 是标准输入/输出工具，界面会给出本地运行命令。
+
+【命令行（可选，进阶）】
+    CTF-Crypto-Lab.exe list                    题目一览
+    CTF-Crypto-Lab.exe info  <题目>            题目详情
+    CTF-Crypto-Lab.exe hint  <题目> 1          分步提示
+    CTF-Crypto-Lab.exe gen   <题目>            领取附件到 dist/<题目>/
+    CTF-Crypto-Lab.exe verify <题目> --keep    验证并保留实例（完整过程）
+    CTF-Crypto-Lab.exe check <题目|all>        批量验证
+    CTF-Crypto-Lab.exe instance <题目> start   启动服务实例
+    CTF-Crypto-Lab.exe instance list           查看运行中的实例
+    CTF-Crypto-Lab.exe doctor                  探测 John the Ripper / rockyou / hashcat / 7-Zip
+    CTF-Crypto-Lab.exe toolkit                 只启动工具箱
+    CTF-Crypto-Lab.exe version                 版本号
+
+【口令破解实战（cracking 分类）】
+  该分类 4 道题使用真实的 John the Ripper + rockyou 流程。
+  本发行版不内置这两个工具；如本机已有，先运行一次
+      CTF-Crypto-Lab.exe doctor
+  程序会扫描磁盘浅层目录并缓存结果，题目页会显示依赖是否满足。
+  没有 John/rockyou 时，ntlm-crack 仍有纯 Python 降级路径，其余 3 题会提示缺少依赖。
+
+【注意】
+  · 全部计算在本机进行，仅在 127.0.0.1 监听，不联网、不上传任何数据。
+  · 请放在有写权限的目录（桌面、D:\tools 等）；Program Files 下会自动改用
+    %LOCALAPPDATA%\CTF-Crypto-Lab 存放 dist/ 与 instances/。
+  · 服务实例端口随机分配，停止实例会结束对应子进程。
+  · 想清理现场：直接删除 dist/ 与 instances/ 两个目录即可。
+
+【目录结构】
+  CTF-Crypto-Lab.exe     主程序（双击 = 启动 Web）
+  challenges/            题目（index.json + 各题 src 附件 / solve.py / writeup.md）
+  lib/                   密码学工具箱与数据（ctfk.py、语料、词表、MD5 碰撞样本）
+  tools/resources.py     外部工具探测
+  dist/                  你领取的题目（运行时生成）
+  instances/             验证实例与服务实例（运行时生成，可随时删除）
+  README.md              完整文档（含题库表与二次开发说明）
+  LICENSE                MIT 许可证
