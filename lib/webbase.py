@@ -90,6 +90,15 @@ a:hover{text-decoration:underline}
 .flagin:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,211,238,.12)}
 .flagin.ok{border-color:rgba(52,211,153,.7);box-shadow:0 0 0 3px rgba(52,211,153,.12)}
 .flagin.bad{border-color:rgba(248,113,113,.7);box-shadow:0 0 0 3px rgba(248,113,113,.12)}
+
+/* ---------- 题目材料（内联展开） ---------- */
+.mat{margin-bottom:14px}
+.mat:last-child{margin-bottom:0}
+.mat-hd{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+.mat-hd b{font-size:.85rem;color:var(--txt)}
+.mat-hd .copy,.mat-hd a.copy{flex:0 0 auto}
+.mat pre.code{max-height:42vh;margin-top:2px}
+.mat img{display:block;margin-top:6px}
 .muted{color:var(--dim)}
 .tiny{font-size:.78rem}
 .mono{font-family:var(--mono)}

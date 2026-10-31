@@ -28,6 +28,8 @@ from webbase import BASE_CSS, JS_HELPERS  # noqa: E402
 import instances as INST  # noqa: E402
 import progress as PG  # noqa: E402
 
+TOOLKIT_PORT = None    # 由 `ctf.py web` 注入真实端口；None 时运行时探测
+
 CAT_CN = {
     "classical": "古典密码", "symmetric": "对称密码", "stream": "流密码与PRNG",
     "rsa": "RSA", "pubkey": "公钥与离散对数", "hash": "哈希", "lattice": "格密码",
@@ -44,6 +46,14 @@ CAT_COLOR = {
 ORDER = ["classical", "symmetric", "stream", "rsa", "pubkey", "hash", "lattice", "cracking"]
 
 
+def _version():
+    try:
+        from ctf import VERSION as V
+        return V.replace("CTF Crypto Lab ", "").lstrip("vV")
+    except Exception:
+        return "3.1"
+
+
 def _index():
     data = json.loads((LAB / "challenges" / "index.json").read_text(encoding="utf-8"))
     return {c["name"]: c for c in data["challenges"]}
@@ -55,6 +65,59 @@ def _safe_src_file(name, fname):
         return None
     p = LAB / "challenges" / c["category"] / c["name"] / "src" / fname
     return p if p.is_file() else None
+
+
+_BIN_EXT = {".zip", ".gz", ".7z", ".rar", ".tar", ".png", ".jpg", ".jpeg",
+            ".gif", ".webp", ".bmp", ".pcap", ".exe", ".dll", ".so", ".pyd",
+            ".pyc", ".pdf", ".der"}
+
+
+def _looks_binary(p: Path) -> bool:
+    """按扩展名 + NUL 字节粗判，避免把二进制塞进 <pre> 变成乱码"""
+    if p.suffix.lower() in _BIN_EXT:
+        return True
+    try:
+        with open(p, "rb") as f:
+            return b"\x00" in f.read(8192)
+    except OSError:
+        return True
+
+
+def _http_local(url, timeout=1.0):
+    """本机探测必须绕过系统代理 —— 否则 127.0.0.1 会被代理拦成 502"""
+    import urllib.request
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(urllib.request.Request(url, headers={"Accept": "application/json"}),
+                     timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def find_toolkit(preferred=None):
+    """
+    工具箱与题目站是两个独立进程，端口可能被占用后顺延，
+    所以链接不能写死 8788 —— 实际探测一下哪个端口在跑工具箱。
+    """
+    import socket
+    ports = []
+    if preferred:
+        ports.append(int(preferred))
+    for p in range(8788, 8798):
+        if p not in ports:
+            ports.append(p)
+    for p in ports:
+        try:
+            with socket.socket() as s:
+                s.settimeout(0.25)
+                if s.connect_ex(("127.0.0.1", p)) != 0:
+                    continue
+            data = _http_local(f"http://127.0.0.1:{p}/api/tools")
+            if isinstance(data, dict) and data.get("tools"):
+                return {"ok": True, "url": f"http://127.0.0.1:{p}",
+                        "port": p, "count": len(data["tools"])}
+        except (OSError, ValueError):
+            continue
+    return {"ok": False, "url": None, "port": None,
+            "hint": "工具箱没在运行 —— 新开一个窗口执行 python ctf.py toolkit"}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -115,6 +178,7 @@ class Handler(BaseHTTPRequestHandler):
                     "run_hint": INST.run_hint(c),
                 })
             return self._json({"challenges": out,
+                               "version": _version(),
                                "cats": [{"k": k, "cn": CAT_CN[k], "icon": CAT_ICON[k],
                                          "color": CAT_COLOR[k]} for k in ORDER],
                                "wordlist": self._wordlist_stats()})
@@ -136,29 +200,36 @@ class Handler(BaseHTTPRequestHandler):
             wp = LAB / "challenges" / c["category"] / c["name"] / "solution" / "writeup.md"
             return self._json({"writeup": wp.read_text(encoding="utf-8") if wp.exists() else ""})
 
-        m = re.match(r"^/api/files/([\w\-]+)$", path)
+        # 题目材料一次性取回：文本直接内联展开，二进制给下载链接
+        m = re.match(r"^/api/material/([\w\-]+)$", path)
         if m:
             c = _index().get(m.group(1))
             if not c:
                 return self._json({"error": "no challenge"}, 404)
             d = LAB / "challenges" / c["category"] / c["name"] / "src"
-            files = []
+            items = []
             if d.exists():
                 for p in sorted(d.iterdir()):
-                    if p.is_file():
-                        files.append({"name": p.name, "size": p.stat().st_size})
-            return self._json({"files": files})
-
-        m = re.match(r"^/api/file/([\w\-]+)/(.+)$", path)
-        if m:
-            p = _safe_src_file(m.group(1), m.group(2))
-            if not p:
-                return self._json({"error": "no such file"}, 404)
-            try:
-                return self._json({"name": p.name,
-                                   "text": p.read_text(encoding="utf-8", errors="replace")})
-            except OSError:
-                return self._json({"name": p.name, "binary": True, "size": p.stat().st_size})
+                    if not p.is_file():
+                        continue
+                    size = p.stat().st_size
+                    item = {"name": p.name, "size": size}
+                    text = None
+                    if not _looks_binary(p):
+                        try:
+                            text = p.read_text(encoding="utf-8", errors="replace")
+                        except OSError:
+                            text = None
+                    if text is None:
+                        item["binary"] = True
+                    else:
+                        item["text"] = text
+                        item["binary"] = False
+                        item["lines"] = text.count("\n") + (0 if text.endswith("\n") else 1)
+                    items.append(item)
+            return self._json({"name": c["name"], "files": items,
+                               "dir": f"challenges/{c['category']}/{c['name']}/src",
+                               "gen": (WLAB / "dist" / c["name"]).exists()})
 
         m = re.match(r"^/api/download/([\w\-]+)/(.+)$", path)
         if m:
@@ -189,6 +260,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/resources":
             import resources as RES
             return self._json(RES.get_resources())
+
+        # 工具箱是独立进程，端口可能顺延 —— 前端据此拿到真实地址
+        if path == "/api/toolkit":
+            return self._json(find_toolkit(TOOLKIT_PORT))
 
         return self._json({"error": "not found"}, 404)
 
@@ -330,18 +405,19 @@ PAGE_RAW = r"""<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CTF Crypto Lab</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>%F0%9F%94%90</text></svg>">
 <style>__CSS__</style>
 </head>
 <body>
 <div class="shell">
   <aside class="side">
-    <div class="brand"><span class="dot"></span><div>CTF Crypto Lab<small>密码学本地训练场</small></div></div>
+    <div class="brand"><span class="dot"></span><div>CTF Crypto Lab<small>密码学本地训练场 · <span id="brandVer">v—</span></small></div></div>
     <nav class="nav" id="nav">
       <a href="#/" data-r="home"><span class="ic">◈</span><span class="tx">概览</span></a>
       <a href="#/challenges" data-r="ch"><span class="ic">▤</span><span class="tx">题目库</span></a>
       <a href="#/resources" data-r="res"><span class="ic">🩺</span><span class="tx">资源探测</span></a>
       <div class="grp">工具</div>
-      <a href="http://127.0.0.1:8788/" target="_blank" rel="noopener"><span class="ic">🧰</span><span class="tx">密码工具箱 ↗</span></a>
+      <a href="#/resources" id="navToolkit"><span class="ic">🧰</span><span class="tx" id="navToolkitTx">密码工具箱</span></a>
       <div class="grp">状态</div>
       <a href="#/" style="cursor:default"><span class="ic">◐</span><span class="tx" id="navprog-tx">0 / 0 完成</span></a>
     </nav>
@@ -389,6 +465,39 @@ function statusChip(n){
   if(r.solved&&r.peeked)return '<span class="tag peek">已看答案</span>';
   if(r.solved)return '<span class="tag ok">✔ 已完成</span>';
   return '<span class="tag bad">未完成</span>';
+}
+
+/* 工具箱是独立进程，端口可能不是 8788 —— 由服务端探测真实地址 */
+let TK=null;
+function applyToolkit(){
+  const a=$("#navToolkit"), tx=$("#navToolkitTx");
+  if(!a)return;
+  if(TK&&TK.ok){
+    a.href=TK.url;a.target="_blank";a.rel="noopener";
+    if(tx)tx.textContent="密码工具箱 :"+TK.port+" ↗";
+  }else{
+    a.href="#/resources";a.removeAttribute("target");
+    if(tx)tx.textContent="密码工具箱（未运行）";
+  }
+}
+function renderToolkitBox(){
+  const els=$$(".tk-box");
+  if(!els.length)return;
+  let html;
+  if(!TK){html='<span class="muted">探测中…</span>';}
+  else if(TK.ok){
+    html='工具箱运行中 <a href="'+TK.url+'" target="_blank" rel="noopener">127.0.0.1:'+TK.port+'</a>'
+      +' · '+TK.count+' 个工具<br>'
+      +'<a class="btn sm" style="margin-top:8px" href="'+TK.url+'" target="_blank" rel="noopener">打开工具箱 ↗</a>';
+  }else{
+    html='工具箱未运行。新开一个终端执行 <span class="mono">python ctf.py toolkit</span>，'
+      +'或用 <span class="mono">python ctf.py web</span> 一次启动两个界面。';
+  }
+  els.forEach(el=>{el.innerHTML=html;});
+}
+async function loadToolkit(){
+  try{TK=await apiGet("/api/toolkit");}catch(e){TK={ok:false};}
+  applyToolkit();renderToolkitBox();
 }
 function colorOf(cat){return (CIB[cat]&&CIB[cat].color)||"var(--acc)";}
 function setNav(r){$$("#nav a[data-r]").forEach(a=>a.classList.toggle("on",a.dataset.r===r));}
@@ -447,13 +556,12 @@ function viewHome(){
       <h2 style="margin-bottom:10px">外部资源</h2>
       <div id="resMini" class="row" style="gap:14px"><span class="muted tiny">加载中…</span></div>
       <div class="tiny muted" style="margin-top:12px;line-height:1.7">
-        cracking 分类的 4 道题使用 John the Ripper + rockyou 真实破解流程。<br>
-        工具箱是独立界面：<a href="http://127.0.0.1:8788/" target="_blank" rel="noopener">127.0.0.1:8788</a>
-        （<span class="mono">python ctf.py toolkit</span> 启动）。
+        cracking 分类的 4 道题使用 John the Ripper + rockyou 真实破解流程。
       </div>
+      <div class="tiny muted tk-box" style="margin-top:12px;line-height:1.8;padding-top:12px;
+           border-top:1px solid var(--line)"><span class="muted">探测工具箱…</span></div>
       <div class="actions" style="margin-top:12px">
         <a class="btn sm" href="#/resources">依赖详情</a>
-        <a class="btn sm" href="http://127.0.0.1:8788/" target="_blank" rel="noopener">打开工具箱 ↗</a>
       </div>
     </div>
   </div>
@@ -465,6 +573,7 @@ function viewHome(){
     <div id="queue" class="tiny muted">点击「自洽性检查」开始，或前往题面页单独检查。</div>
   </div>`;
   renderResMini();
+  renderToolkitBox();
   $("#btnGenAll").onclick=async e=>{e.target.disabled=true;
     try{const r=await apiPost("/api/gen-all");toast(`已生成 ${r.count}/${r.total} 题 → dist/`);}
     catch(err){toast("生成失败: "+err.message);}finally{e.target.disabled=false;}};
@@ -625,8 +734,7 @@ function viewChallenge(name){
   </div>
 
   <div class="tabs" id="TABS">
-    <button data-t="desc" class="on">描述</button>
-    <button data-t="files">附件</button>
+    <button data-t="desc" class="on">题目</button>
     <button data-t="hints">提示 (${c.hints_count})</button>
     <button data-t="wu">题解</button>
     <button data-t="run">自检</button>
@@ -635,22 +743,23 @@ function viewChallenge(name){
   <div class="pane on" id="P-desc">
     <div class="card pad" style="line-height:1.85;font-size:.95rem">${esc(c.description)}</div>
     <div class="actions" style="margin-top:14px">
-      <button class="btn primary" id="bGen">📥 领取题目 (gen)</button>
+      <button class="btn" id="bGen">📥 复制到 dist/</button>
       <button class="btn" id="bHint">💡 看提示</button>
       <button class="btn" id="bCheck">🔍 自检本题</button>
       <button class="btn ghost" id="bGiveUp">🔓 放弃并看答案</button>
     </div>
     <div class="res" id="R"></div>
-  </div>
 
-  <div class="pane" id="P-files">
-    <div class="card" style="margin-bottom:12px">
-      <div class="tiny muted">附件来自 <span class="mono">challenges/${c.category}/${name}/src/</span>
-        · 点击文件名预览，旁边可下载</div>
-      <div id="FILES" class="row" style="margin-top:10px">
-        <span class="muted tiny">加载中…</span></div>
+    <div class="card pad" id="MATERIAL" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <h2>题目材料</h2>
+        <span class="tiny muted" id="MATMETA"></span>
+      </div>
+      <div class="tiny muted" style="margin-bottom:10px">
+        材料已随题目直接展开在本页，无需另开窗口或去别的站点。
+      </div>
+      <div id="MATBODY"><div class="row tiny muted"><span class="spin"></span> 加载材料…</div></div>
     </div>
-    <div id="FPREV"></div>
   </div>
 
   <div class="pane" id="P-hints">
@@ -756,11 +865,10 @@ function viewChallenge(name){
     $$("#TABS button").forEach(x=>x.classList.toggle("on",x===b));
     $$(".pane").forEach(p=>p.classList.toggle("on",p.id==="P-"+b.dataset.t));
     if(b.dataset.t==="wu")loadWu();
-    if(b.dataset.t==="files")loadFiles();
     if(b.dataset.t==="hints")loadHints();
   });
-  $("#bHint").onclick=()=>$$("#TABS button")[2].click();
-  $("#bCheck").onclick=()=>$$("#TABS button")[4].click();
+  $("#bHint").onclick=()=>$$("#TABS button")[1].click();
+  $("#bCheck").onclick=()=>$$("#TABS button")[3].click();
 
   /* ---- 验证: 展示完整过程 (实例目录 / 命令 / 输出 / 比对) ---- */
   let lastInst=null;
@@ -862,17 +970,61 @@ function viewChallenge(name){
     sc.innerHTML='<h2>本地预言机 / 工具脚本</h2>'
       +'<div class="tiny muted" style="margin-top:6px;line-height:1.8">'
       +'本题附带 <span class="mono">oracle.py</span>（stdin/stdout 交互，不监听端口）。'
-      +'先在「附件」页领取题目，然后在终端运行它并按提示输入：</div>'
+      +'材料已在上方展开；复制到 dist/ 后可在终端运行它并按提示输入：</div>'
       +'<pre class="code short" style="margin-top:10px">'+esc(c.run_hint||"")+'</pre>';
   }else{
     sc.innerHTML='<span class="tiny muted">本题是无服务端的离线题：附件即全部输入，直接分析即可。</span>';
   }
 
 
-  async function gen(btn){if(btn)btn.disabled=true;
-    try{const r=await apiPost("/api/gen/"+name);toast("已生成 → "+r.dest);loadFiles();}
-    catch(err){toast("生成失败: "+err.message);}finally{if(btn)btn.disabled=false;}}
+  async function gen(btn){
+    if(btn)btn.disabled=true;
+    try{const r=await apiPost("/api/gen/"+name);toast("已复制到 "+r.dest);loadMaterial();}
+    catch(err){toast("复制失败: "+err.message);}
+    finally{if(btn)btn.disabled=false;}
+  }
   $("#bGen").onclick=e=>gen(e.target);
+
+  /* ---- 题目材料：直接内联展开，不用另开窗口 ---- */
+  async function loadMaterial(){
+    const body=$("#MATBODY"), meta=$("#MATMETA");
+    let r;
+    try{r=await apiGet("/api/material/"+name);}
+    catch(err){
+      body.innerHTML='<span class="tiny" style="color:var(--err)">材料读取失败: '+esc(err.message)+'</span>';
+      return;
+    }
+    const files=r.files||[];
+    if(!files.length){
+      body.innerHTML='<span class="muted tiny">本题没有附件 —— 描述即全部信息。</span>';
+      meta.textContent="";return;
+    }
+    meta.innerHTML=esc(r.dir)+' · '+files.length+' 个文件'
+      +(r.gen?' · <span style="color:var(--ok)">已复制到 dist/</span>':'');
+    body.innerHTML=files.map((f,i)=>{
+      const url='/api/download/'+encodeURIComponent(name)+'/'+encodeURIComponent(f.name);
+      const dl='<a class="copy" href="'+url+'" download>下载</a>';
+      const head='<div class="mat-hd"><b class="mono">'+esc(f.name)+'</b>'
+        +'<span class="tiny muted">'+fmtB(f.size)
+        +(f.binary?' · 二进制':' · '+(f.lines||0)+' 行')+'</span>'
+        +'<span style="margin-left:auto">'+(f.binary?'':(''+
+          '<button class="copy" data-cp="'+i+'">复制</button> '))+dl+'</span></div>';
+      if(f.binary){
+        if(/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name)){
+          return '<div class="mat">'+head
+            +'<img src="'+url+'" style="max-width:100%;border-radius:10px;border:1px solid var(--line)">'
+            +'</div>';
+        }
+        return '<div class="mat">'+head
+          +'<div class="tiny muted">二进制文件，下载后本地分析。</div></div>';
+      }
+      return '<div class="mat">'+head
+        +'<pre class="code" id="matpre'+i+'">'+esc(f.text||"")+'</pre></div>';
+    }).join("");
+    $$('#MATBODY button[data-cp]').forEach(b=>b.onclick=()=>{
+      const f=files[+b.dataset.cp];copyText(f.text||"");
+    });
+  }
 
   let hints=null,shown=0;
   async function loadHints(){
@@ -897,44 +1049,7 @@ function viewChallenge(name){
     $("#WU").innerHTML=r.writeup?md(r.writeup):'<span class="muted">暂无题解</span>';
   }
 
-  async function loadFiles(){
-    const r=await apiGet("/api/files/"+name);
-    const box=$("#FILES");
-    if(!(r.files||[]).length){
-      box.innerHTML='<span class="muted tiny">还没有生成材料 —— 点击「领取题目 (gen)」或运行 '
-        +'<span class="mono">python ctf.py gen '+esc(name)+'</span></span>';
-      return;
-    }
-    box.innerHTML=r.files.map(f=>`<span class="row" style="gap:6px">
-      <button class="btn sm" data-f="${esc(f.name)}">${esc(f.name)}</button>
-      <span class="tiny muted">${fmtB(f.size)}</span>
-      <a class="copy" href="/api/download/${name}/${encodeURIComponent(f.name)}" download>下载</a>
-    </span>`).join("");
-    $$("#FILES button").forEach(b=>b.onclick=()=>preview(b.dataset.f));
-    preview(r.files[0].name);
-  }
-  async function preview(fname){
-    const r=await apiGet(`/api/file/${name}/${encodeURIComponent(fname)}`);
-    const box=$("#FPREV");
-    const img=/\.(png|jpe?g|gif|webp|bmp)$/i.test(fname);
-    if(img){
-      box.innerHTML=`<div class="card"><h3 style="margin-bottom:8px">${esc(fname)}</h3>
-        <img src="/api/download/${name}/${encodeURIComponent(fname)}"
-          style="max-width:100%;border-radius:10px;border:1px solid var(--line)"></div>`;
-      return;
-    }
-    if(r.binary){
-      box.innerHTML=`<div class="card"><h3>${esc(fname)}</h3>
-        <span class="muted tiny">二进制文件 (${fmtB(r.size||0)}) — 请下载后分析</span></div>`;
-      return;
-    }
-    box.innerHTML=`<div class="card">
-      <div class="row" style="justify-content:space-between;margin-bottom:8px">
-        <h3>${esc(fname)}</h3><button class="copy" id="cpF">复制内容</button></div>
-      <pre class="code">${esc(r.text||"")}</pre></div>`;
-    $("#cpF").onclick=()=>copyText(r.text||"");
-  }
-  loadFiles();
+  loadMaterial();
 }
 
 /* ---------------- 资源页 ---------------- */
@@ -978,7 +1093,15 @@ async function viewRes(){
       </tbody></table></div>
       <div class="tiny muted" style="margin-top:12px">重新扫描 CLI:
         <span class="mono">python ctf.py doctor --rescan</span></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <h2>密码工具箱</h2>
+        <button class="btn sm" id="tkRecheck">↻ 重新探测</button></div>
+      <div class="tiny muted tk-box" style="line-height:1.8">探测中…</div>
     </div>`;
+  renderToolkitBox();
+  $("#tkRecheck").onclick=e=>{e.target.disabled=true;loadToolkit().finally(()=>{e.target.disabled=false;});};
 }
 
 /* ---------------- 路由 ---------------- */
@@ -998,11 +1121,13 @@ async function boot(){
     const d=await apiGet("/api/index");
     CH=d.challenges;
     (d.cats||[]).forEach(c=>{CATS.push(c);CIB[c.k]=c;});
+    const bv=$("#brandVer");if(bv)bv.textContent="v"+(d.version||"?");
   }catch(e){
     $("#view").innerHTML='<div class="empty"><div class="big">⚠</div>无法加载题目索引<br>'
       +'<span class="tiny">'+esc(e.message)+'</span></div>';return;
   }
   await refreshProgress();
+  await loadToolkit();
   try{RES=await apiGet("/api/resources");}catch(e){}
   route();
 }
@@ -1021,7 +1146,9 @@ boot();
 PAGE = PAGE_RAW.replace("__CSS__", BASE_CSS).replace("__JS__", JS_HELPERS)
 
 
-def serve(port=8787, quiet=False):
+def serve(port=8787, quiet=False, toolkit_port=None):
+    global TOOLKIT_PORT
+    TOOLKIT_PORT = toolkit_port
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     try:
         srv.serve_forever()

@@ -44,7 +44,7 @@ from ui import UI  # noqa: E402
 
 INDEX_PATH = LAB / "challenges" / "index.json"
 
-VERSION = "CTF Crypto Lab v3.1"
+VERSION = "CTF Crypto Lab v3.1.1"
 
 CATEGORY_ORDER = ["classical", "symmetric", "stream", "rsa", "pubkey", "hash", "lattice", "cracking"]
 CATEGORY_CN = {
@@ -769,7 +769,8 @@ def cmd_web(args):
               title="CTF Crypto Lab", color="bright_cyan")
     threading.Thread(target=_toolkit, kwargs={"port": p2, "quiet": True},
                      daemon=True).start()
-    threading.Thread(target=_console, kwargs={"port": p1, "quiet": True},
+    threading.Thread(target=_console, kwargs={"port": p1, "quiet": True,
+                                              "toolkit_port": p2},
                      daemon=True).start()
     ok1, ok2 = _wait_port(p1), _wait_port(p2)
     if not (ok1 and ok2):
