@@ -11,6 +11,8 @@ env/
 dist/
 instances/
 lib/resources.json
+progress.json
+progress.json.tmp
 *.log
 
 # ---- 打包产物 ----
@@ -25,6 +27,9 @@ release/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- 智能体工作区（本地笔记，不入公开仓库）----
+.workbuddy/
 
 # ---- 临时 ----
 *.tmp

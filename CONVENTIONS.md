@@ -173,8 +173,19 @@ RES.rockyou_line(res, 73907)                         # 取第 N 行 (1-based)
 | 两者同时 | 二者 | 8787/8788 | `python ctf.py web` |
 
 **题目站**：hash 路由 `#/`（概览）、`#/challenges`、`#/c/<name>`、`#/resources`；API:
-GET `index / hints / flag / writeup / files / file / download / resources`，
-POST `check/<name> / gen/<name> / gen-all`。
+GET `index / hints / writeup / files / file / download / script / progress / resources / instances`，
+POST `submit/<name> / giveup/<name> / progress/reset / check/<name> / gen/<name> / gen-all / verify/<name> / instance/...`。
+
+**判题约定（重要）**：
+* 「完成」只有一个入口 —— `progress.submit()`。GET 侧不提供明文 flag 接口
+  （旧 `/api/flag/<name>` 已移除），任何新功能都不得绕过判题直接把题标记为完成。
+* 参考题解自检（`check` / `verify` / `#/c/<name>` 的「自检」）**只验证题目材料自洽**，
+  与做题进度无关，禁止在其中写入进度。
+* 看过答案走 `progress.peek()`：只打 `peeked` 标记，不置 `solved`；
+  `peeked` 的题完成时仍计入总分，但不计入「独立解出」(`clean`)。
+* 判题输入先经 `progress.normalize()`（去空白、全角括号归一），再用
+  `hmac.compare_digest` 比对，严格区分大小写。
+* 进度文件固定为 `WLAB/progress.json`，读写必须走 `progress.py`，不要各自开文件。
 
 **工具箱**：路由 `#/`、`#/t/<id>`、`#/docs`；API: GET `tools`，POST `tool/<id>`。
 
@@ -208,4 +219,6 @@ POST `check/<name> / gen/<name> / gen-all`。
   因此 solve/server/oracle 里可以直接用 `sys.executable` 启动同目录的 .py 脚本 ——
   但**不要**再用 `sys.executable -c "..."`（exe 不支持 -c）。
 * **回归门槛**：任何改动后至少跑 `python tools/test_ctfk.py` 与 `python ctf.py check all`；
+  改动判题/进度相关代码时，还要覆盖三种输入：错误 flag（不记完成）、正确 flag（记完成并加分）、
+  重复提交（不重复计分），以及 `giveup` 后提交正确 flag（计入 `peeked`、不计入 `clean`）。
   涉及打包的改动还要在 `build_dist/` 里复跑一遍 `CTF-Crypto-Lab.exe check all`。

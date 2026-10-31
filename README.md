@@ -15,6 +15,9 @@
 - **可观察的验证**：点「验证」会展示全过程——实例目录、真实运行命令、脚本 stdout/stderr、flag 提取与逐字比对；可勾选「保留实例」查看现场，也能直接查看参考脚本（带剧透确认）。
 - **真实服务实例**：5 道服务型题目可一键启动本地服务，自动分配端口、显示 READY 与连接命令，用完即停。
 - **真实破解链路**：cracking 分类接入本机 John the Ripper + rockyou（自动探测，可选），走 `zip2john → john → 还原口令` 的真实流程。
+- **提交式判题**：每题都要把算出的 `flag{...}` 填进提交框（或 `python ctf.py submit <题目>`），
+  **答对才记为完成**；答错只给格式提示和提交次数，不透露答案。真做不出来可以「放弃并看答案」，
+  但会标记为「看过答案」，不计入「独立解出」。
 - **全部本地**：只监听 `127.0.0.1`，不联网、不上传任何数据；flag 明文存于仓库，方便自测。
 
 ## 快速开始
@@ -48,8 +51,10 @@ python ctf.py list                    # 题目一览
 python ctf.py info  rsa-wiener        # 题目详情
 python ctf.py hint  rsa-wiener 1      # 分步提示
 python ctf.py gen   rsa-wiener        # 领取附件到 dist/
-python ctf.py verify rsa-wiener --keep # 验证并保留实例（展示全过程）
-python ctf.py check all               # 批量验证（44/44）
+python ctf.py submit rsa-wiener       # 提交 flag 判题（答对才记完成）
+python ctf.py progress                # 我的进度：分类统计 + 已完成列表
+python ctf.py verify rsa-wiener --keep # 自检：跑参考题解看全过程（不计进度）
+python ctf.py check all               # 批量自检（44/44）
 python ctf.py instance padding-oracle start   # 启动服务实例
 python ctf.py doctor                  # 探测 JtR / rockyou / hashcat / 7-Zip
 python ctf.py --plain list            # 关闭彩色输出
@@ -106,9 +111,24 @@ python ctf.py --plain list            # 关闭彩色输出
 
 推荐顺序：古典 → 哈希/编码 → 对称/流密码 → RSA 基础 → RSA 进阶 → 公钥/离散对数 → 格密码。
 
-## 验证与实例：它们到底是什么
+## 判题：题目怎么才算「完成」
 
-题面页的「验证」只做一件事：**确认题目材料与参考题解自洽**，与你的做题进度无关。点下去会看到 6 个步骤：
+系统只认一种完成方式——**提交正确的 flag**。
+
+| 你的动作 | 是否记完成 | 说明 |
+|----------|-----------|------|
+| 在题面页提交框填入正确的 `flag{...}` | ✅ 记完成并加分 | 唯一入口；大小写敏感，全角括号会自动纠正 |
+| `python ctf.py submit <题目>` | ✅ 同上 | 与网页读写同一份 `progress.json` |
+| 答错 / 格式不对 | ❌ | 只回「不正确」或格式提示，并累计提交次数，不透露答案 |
+| 点「自检」跑参考题解 | ❌ | 那是在验证题目材料本身，不是你在解题 |
+| 点「放弃并看答案」（或 `ctf.py flag`） | ❌ | 给答案但打「看过答案」标记；之后提交正确仍算完成，只是不计入「独立解出」 |
+
+进度存在项目根目录的 `progress.json`（首次提交时生成，已加入 `.gitignore`），
+网页与命令行共用；概览页可以一键重置。
+
+## 自检与实例：它们到底是什么
+
+题面页的「自检」只做一件事：**确认题目材料与参考题解自洽**，与你的做题进度无关。点下去会看到 6 个步骤：
 
 | 步骤 | 实际发生的事 |
 |------|--------------|
@@ -140,12 +160,13 @@ python ctf.py --plain list            # 关闭彩色输出
 
 | 路由 | 内容 |
 |------|------|
-| `#/` | 总分/已完成/分类进度、领取全部题目、一键验证全部（实时队列） |
+| `#/` | 已完成/得分/独立解出、分类进度、领取全部题目、自洽性检查（实时队列）、重置进度 |
 | `#/challenges` | 搜索（题目名/考点/分类/难度/分值）、难度筛选、三种排序 |
-| `#/c/<题目>` | 完整题面页：描述 / 附件预览与下载 / 提示逐条揭示 / 题解 / 验证 / 上一题下一题 |
+| `#/c/<题目>` | 题面页：**提交 flag** / 描述 / 附件预览与下载 / 提示逐条揭示 / 题解 / 自检 / 上一题下一题 |
 | `#/resources` | JtR、rockyou、hashcat、7-Zip 状态与每题依赖可用性 |
 
-进度保存在浏览器 localStorage；桌面 4 列、平板 2 列、手机 1 列自适应。
+进度由服务端 `progress.json` 提供（不再是浏览器 localStorage），换浏览器、换设备都能接上；
+桌面 4 列、平板 2 列、手机 1 列自适应。
 
 ### 密码工具箱（`:8788`）
 
@@ -171,6 +192,7 @@ CTF-Crypto-Lab/
 ├── ctf.py                  # 入口：CLI / Web / 打包后充当 Python 解释器 (--run-py)
 ├── labenv.py               # 路径定位（源码/打包、只读资源/可写目录）
 ├── instances.py            # 验证实例与服务实例管理
+├── progress.py             # flag 判题 + 做题进度（progress.json，CLI/Web 共用）
 ├── webconsole.py           # 题目站（多页面 SPA + JSON API）
 ├── toolkit_web.py          # 密码工具箱（38 个工具）
 ├── lib/
@@ -196,7 +218,7 @@ CTF-Crypto-Lab/
 └── CONVENTIONS.md          # 出题 / 解题 / Web 二开规范
 ```
 
-运行时生成（已在 .gitignore 中）：`dist/`（领取的题目）、`instances/`（验证与服务实例）、`lib/resources.json`（资源探测缓存）。
+运行时生成（已在 .gitignore 中）：`dist/`（领取的题目）、`instances/`（验证与服务实例）、`lib/resources.json`（资源探测缓存）、`progress.json`（做题进度）。
 
 ## 工具箱 `lib/ctfk.py`
 

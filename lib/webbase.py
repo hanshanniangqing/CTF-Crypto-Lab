@@ -78,6 +78,18 @@ a:hover{text-decoration:underline}
 .t-困难{background:rgba(251,146,60,.18);color:#fb923c}
 .t-专家{background:rgba(248,113,113,.18);color:var(--err)}
 .t-dim{background:rgba(132,150,184,.14);color:var(--dim)}
+.tag.ok{background:rgba(52,211,153,.15);color:var(--ok)}
+.tag.bad{background:rgba(132,150,184,.14);color:var(--dim)}
+.tag.peek{background:rgba(251,191,36,.15);color:var(--warn)}
+
+/* ---------- flag 提交框 ---------- */
+.flagin{flex:1 1 260px;min-width:180px;background:#0b111c;border:1px solid var(--line2);
+  color:var(--txt);border-radius:var(--r2);padding:9px 13px;font-size:.9rem;
+  font-family:var(--mono);outline:none;letter-spacing:.3px;transition:.15s}
+.flagin::placeholder{color:var(--dim2)}
+.flagin:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(34,211,238,.12)}
+.flagin.ok{border-color:rgba(52,211,153,.7);box-shadow:0 0 0 3px rgba(52,211,153,.12)}
+.flagin.bad{border-color:rgba(248,113,113,.7);box-shadow:0 0 0 3px rgba(248,113,113,.12)}
 .muted{color:var(--dim)}
 .tiny{font-size:.78rem}
 .mono{font-family:var(--mono)}

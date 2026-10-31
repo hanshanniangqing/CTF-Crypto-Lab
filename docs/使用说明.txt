@@ -1,4 +1,4 @@
-CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
+CTF Crypto Lab v3.1 — 密码学本地训练场（免安装版）
 ==================================================
 
 【怎么用】
@@ -15,12 +15,21 @@ CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
   另有 38 个工具的密码工具箱（编码、古典、XOR、哈希、RSA 攻击、PRNG、格攻击）。
 
 【在题目站里做题】
-  概览 → 查看总分与分类进度，“领取全部题目”把附件复制到 dist/。
+  概览 → 查看总分、已完成、独立解出与分类进度，“领取全部题目”把附件复制到 dist/。
   题目库 → 搜索 / 难度筛选 / 按分值排序，点卡片进入完整题面页。
-  题面页 → 描述、附件在线预览与下载、分步提示（逐条揭示）、题解、验证。
+  题面页 → 提交 flag、描述、附件在线预览与下载、分步提示（逐条揭示）、题解、自检。
 
-【“验证”是干什么的】
-  验证只用来确认「题目材料 + 参考题解」自洽，不记录你的做题进度。
+【怎样才算完成一道题】
+  只有一种方式：把算出的 flag 填进题面页的“提交 flag”输入框，回车或点“提交”。
+    · 答对      → 本题标记为已完成，计入得分（重复提交不重复加分）
+    · 答错      → 只回“不正确”和提交次数，不透露答案
+    · 格式不对  → 提示 flag 格式应为 flag{...}
+  进度存在程序目录的 progress.json，换浏览器也不会丢；概览页可一键“重置进度”。
+  实在做不出来，可以点“放弃并看答案”：会给标准答案，但本题标记为“看过答案”，
+  不计入“独立解出”（之后自己提交正确仍计入总分）。
+
+【“自检”是干什么的】
+  自检只用来确认「题目材料 + 参考题解」自洽，不影响你的做题进度。
   点击后依次显示：
     ① 创建实例目录   附件复制到 instances/verify/<题目>/（勾选“保留实例”则不删除）
     ② 启动参考题解   在该目录运行 solution/solve.py，命令原样展示
@@ -32,7 +41,7 @@ CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
 
 【服务型题目（会分配端口）】
   带 server.py 的题（padding-oracle、cbc-bitflip、ecb-byte-at-a-time、
-  rsa-lsb-oracle、md5-length-extension）在“验证”页有「启动实例」按钮：
+  rsa-lsb-oracle、md5-length-extension）在“自检”页有「启动实例」按钮：
   启动后显示端口、READY 行、实例目录、启动命令与连接方式，例如
       nc 127.0.0.1 61155
   自己写客户端攻击，完成后点「停止实例」。实例脚本在 instances/server/<题目>/。
@@ -43,8 +52,11 @@ CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
     CTF-Crypto-Lab.exe info  <题目>            题目详情
     CTF-Crypto-Lab.exe hint  <题目> 1          分步提示
     CTF-Crypto-Lab.exe gen   <题目>            领取附件到 dist/<题目>/
-    CTF-Crypto-Lab.exe verify <题目> --keep    验证并保留实例（完整过程）
-    CTF-Crypto-Lab.exe check <题目|all>        批量验证
+    CTF-Crypto-Lab.exe submit <题目>           提交 flag 判题（答对才记完成）
+    CTF-Crypto-Lab.exe progress                我的进度：分类统计 + 已完成列表
+    CTF-Crypto-Lab.exe verify <题目> --keep    自检并保留实例（完整过程）
+    CTF-Crypto-Lab.exe check <题目|all>        批量自检（不写进度）
+    CTF-Crypto-Lab.exe flag  <题目>            看答案（标记“看过答案”，不计完成）
     CTF-Crypto-Lab.exe instance <题目> start   启动服务实例
     CTF-Crypto-Lab.exe instance list           查看运行中的实例
     CTF-Crypto-Lab.exe doctor                  探测 John the Ripper / rockyou / hashcat / 7-Zip
@@ -63,7 +75,8 @@ CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
   · 请放在有写权限的目录（桌面、D:\tools 等）；Program Files 下会自动改用
     %LOCALAPPDATA%\CTF-Crypto-Lab 存放 dist/ 与 instances/。
   · 服务实例端口随机分配，停止实例会结束对应子进程。
-  · 想清理现场：直接删除 dist/ 与 instances/ 两个目录即可。
+  · 想清理现场：直接删除 dist/ 与 instances/ 两个目录即可；
+    想连做题进度一起清空，删除 progress.json（或在概览页点“重置进度”）。
 
 【目录结构】
   CTF-Crypto-Lab.exe     主程序（双击 = 启动 Web）
@@ -72,5 +85,6 @@ CTF Crypto Lab v3.0 — 密码学本地训练场（免安装版）
   tools/resources.py     外部工具探测
   dist/                  你领取的题目（运行时生成）
   instances/             验证实例与服务实例（运行时生成，可随时删除）
+  progress.json          做题进度（运行时生成，可随时删除）
   README.md              完整文档（含题库表与二次开发说明）
   LICENSE                MIT 许可证

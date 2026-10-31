@@ -26,6 +26,7 @@ sys.path.insert(0, str(LAB))
 
 from webbase import BASE_CSS, JS_HELPERS  # noqa: E402
 import instances as INST  # noqa: E402
+import progress as PG  # noqa: E402
 
 CAT_CN = {
     "classical": "古典密码", "symmetric": "对称密码", "stream": "流密码与PRNG",
@@ -77,6 +78,17 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, obj, code=200):
         self._send(code, json.dumps(obj, ensure_ascii=False))
 
+    def _body(self):
+        """读请求体 JSON；空体/坏 JSON 一律当 {} —— 判题接口不能因解析失败 500"""
+        try:
+            ln = int(self.headers.get("Content-Length") or 0)
+            if not ln:
+                return {}
+            data = json.loads(self.rfile.read(ln).decode("utf-8") or "{}")
+            return data if isinstance(data, dict) else {}
+        except (ValueError, UnicodeDecodeError):
+            return {}
+
     def do_GET(self):
         path = urllib.parse.unquote(self.path.split("?")[0])
         if path in ("/", "/index.html"):
@@ -112,10 +124,9 @@ class Handler(BaseHTTPRequestHandler):
             c = _index().get(m.group(1))
             return self._json({"hints": c.get("hints", [])}) if c else self._json({"error": "no challenge"}, 404)
 
-        m = re.match(r"^/api/flag/([\w\-]+)$", path)
-        if m:
-            c = _index().get(m.group(1))
-            return self._json({"flag": c["flag"]}) if c else self._json({"error": "no challenge"}, 404)
+        # 进度只在服务端 —— 只有提交正确 flag 才会写进这里
+        if path == "/api/progress":
+            return self._json(PG.summary(_index()))
 
         m = re.match(r"^/api/writeup/([\w\-]+)$", path)
         if m:
@@ -192,6 +203,34 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urllib.parse.unquote(self.path)
+
+        # ---- 判题：填入正确 flag 才记完成（唯一的进度写入入口）----
+        m = re.match(r"^/api/submit/([\w\-]+)$", path)
+        if m:
+            idx = _index()
+            c = idx.get(m.group(1))
+            if not c:
+                return self._json({"error": "no challenge"}, 404)
+            res = PG.submit(c, self._body().get("flag"))
+            res["progress"] = PG.summary(idx)
+            return self._json(res)
+
+        # ---- 放弃：给答案，但只打「已看答案」标记，不记完成 ----
+        m = re.match(r"^/api/giveup/([\w\-]+)$", path)
+        if m:
+            idx = _index()
+            c = idx.get(m.group(1))
+            if not c:
+                return self._json({"error": "no challenge"}, 404)
+            res = PG.peek(c)
+            res["progress"] = PG.summary(idx)
+            return self._json(res)
+
+        if path == "/api/progress/reset":
+            if not self._body().get("confirm"):
+                return self._json({"ok": False, "error": "需要 {confirm:true}"}, 400)
+            PG.reset()
+            return self._json({"ok": True, "progress": PG.summary(_index())})
 
         m = re.match(r"^/api/check/([\w\-]+)$", path)
         if m:
@@ -306,7 +345,7 @@ PAGE_RAW = r"""<!DOCTYPE html>
       <div class="grp">状态</div>
       <a href="#/" style="cursor:default"><span class="ic">◐</span><span class="tx" id="navprog-tx">0 / 0 完成</span></a>
     </nav>
-    <div class="foot">进度保存在本浏览器<br>工具箱: <span class="mono">python ctf.py toolkit</span></div>
+    <div class="foot">提交 flag 才算完成<br>进度: <span class="mono">progress.json</span><br>工具箱: <span class="mono">ctf.py toolkit</span></div>
   </aside>
   <div class="main">
     <div class="topbar">
@@ -325,19 +364,31 @@ __JS__
 const CATS=[], CIB={};
 let CH=[], RES=null;
 
-const LS_KEY="ctflab-done";
-function doneSet(){try{return new Set(JSON.parse(localStorage.getItem(LS_KEY)||"[]"))}catch(e){return new Set()}}
-function setDone(n,on){const s=doneSet();on?s.add(n):s.delete(n);
-  localStorage.setItem(LS_KEY,JSON.stringify([...s]));refreshProgress();}
-function refreshProgress(){
-  const s=doneSet();const done=CH.filter(c=>s.has(c.name));
-  const pts=done.reduce((a,c)=>a+c.points,0);
-  const total=CH.reduce((a,c)=>a+c.points,0);
+/* 进度只存在服务端 (/api/progress) → 本机 progress.json，CLI 与网页共用同一份。
+   网页不提供「手动标记完成」：只有提交正确的 flag 才会变成已完成。 */
+let PG={records:{},stats:{total:0,total_points:0,solved:0,solved_points:0,
+  clean:0,clean_points:0,peeked:0,attempts:0,percent:0}};
+function doneSet(){const s=new Set();
+  for(const n in (PG.records||{})){const r=PG.records[n];if(r&&r.solved)s.add(n);}return s;}
+function recOf(n){return (PG.records||{})[n]||{};}
+async function refreshProgress(){
+  try{PG=await apiGet("/api/progress");}catch(e){}
+  paintProgress();
+}
+function paintProgress(){
+  const st=PG.stats||{};
   const el=$("#statline");
-  if(el)el.innerHTML=`<span>题目 <b style="color:var(--txt)">${done.length}</b>/${CH.length}</span>
-    <span>得分 <b style="color:var(--acc2)">${pts}</b>/${total}</span>
-    <progress max="100" value="${total?pts*100/total:0}"></progress>`;
-  const nt=$("#navprog-tx");if(nt)nt.textContent=`${done.length} / ${CH.length} 完成`;
+  if(el)el.innerHTML=`<span>题目 <b style="color:var(--txt)">${st.solved||0}</b>/${st.total||0}</span>
+    <span>得分 <b style="color:var(--acc2)">${st.solved_points||0}</b>/${st.total_points||0}</span>
+    ${st.peeked?`<span>看答案 <b style="color:var(--warn)">${st.peeked}</b></span>`:""}
+    <progress max="100" value="${st.percent||0}"></progress>`;
+  const nt=$("#navprog-tx");if(nt)nt.textContent=`${st.solved||0} / ${st.total||0} 完成`;
+}
+function statusChip(n){
+  const r=recOf(n);
+  if(r.solved&&r.peeked)return '<span class="tag peek">已看答案</span>';
+  if(r.solved)return '<span class="tag ok">✔ 已完成</span>';
+  return '<span class="tag bad">未完成</span>';
 }
 function colorOf(cat){return (CIB[cat]&&CIB[cat].color)||"var(--acc)";}
 function setNav(r){$$("#nav a[data-r]").forEach(a=>a.classList.toggle("on",a.dataset.r===r));}
@@ -345,9 +396,8 @@ function setNav(r){$$("#nav a[data-r]").forEach(a=>a.classList.toggle("on",a.dat
 /* ---------------- 概览 ---------------- */
 function viewHome(){
   setNav("home");$("#crumb").textContent="概览";
-  const s=doneSet();const done=CH.filter(c=>s.has(c.name));
-  const pts=done.reduce((a,c)=>a+c.points,0);
-  const total=CH.reduce((a,c)=>a+c.points,0);
+  const s=doneSet();
+  const st=PG.stats||{};const pts=st.solved_points||0,total=st.total_points||0;
   const cats=CATS.map(cat=>{const list=CH.filter(c=>c.category===cat.k);
     return {cat,list,d:list.filter(c=>s.has(c.name)).length};});
   $("#view").innerHTML=`
@@ -360,18 +410,24 @@ function viewHome(){
       </div>
       <div class="row">
         <button class="btn primary" id="btnGenAll">📥 领取全部题目</button>
-        <button class="btn" id="btnCheckAll">▶ 一键验证全部</button>
+        <button class="btn" id="btnCheckAll">🔍 自洽性检查</button>
+        <button class="btn ghost" id="btnReset">↺ 重置进度</button>
       </div>
     </div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-top:18px">
-      ${[[CH.length,"题目总数"],[total,"总分"],[done.length,"已完成"],[pts,"已得分"]].map(([v,l])=>
+      ${[[CH.length,"题目总数"],[total,"总分"],[st.solved||0,"已完成"],
+         [pts,"已得分"],[st.clean||0,"独立解出"]].map(([v,l])=>
         `<div class="card" style="padding:12px 14px;text-align:center">
           <div style="font-size:1.5rem;font-weight:700;color:var(--acc)">${v}</div>
           <div class="tiny muted">${l}</div></div>`).join("")}
     </div>
     <div class="row" style="margin-top:14px;gap:8px">
-      <div class="bar" style="flex:1"><i style="width:${total?pts*100/total:0}%"></i></div>
-      <span class="tiny muted">${total?Math.round(pts*100/total):0}%</span>
+      <div class="bar" style="flex:1"><i style="width:${st.percent||0}%"></i></div>
+      <span class="tiny muted">${st.percent||0}%</span>
+    </div>
+    <div class="tiny muted" style="margin-top:10px">
+      进度保存在本机 <span class="mono">progress.json</span>，与 <span class="mono">python ctf.py submit</span> 共用；
+      <b style="color:var(--txt)">只有提交正确的 flag 才会记为完成</b>，看答案不计分。
     </div>
   </div>
 
@@ -404,14 +460,21 @@ function viewHome(){
 
   <div class="card">
     <div class="row" style="justify-content:space-between;margin-bottom:6px">
-      <h2>验证队列</h2><span class="tiny muted">在线运行每题解答脚本并核对 flag</span></div>
-    <div id="queue" class="tiny muted">点击「一键验证全部」开始，或前往题面页单独验证。</div>
+      <h2>自洽性检查</h2>
+      <span class="tiny muted">运行每题「参考题解」核对题目本身，<b style="color:var(--txt)">不影响你的进度</b></span></div>
+    <div id="queue" class="tiny muted">点击「自洽性检查」开始，或前往题面页单独检查。</div>
   </div>`;
   renderResMini();
   $("#btnGenAll").onclick=async e=>{e.target.disabled=true;
     try{const r=await apiPost("/api/gen-all");toast(`已生成 ${r.count}/${r.total} 题 → dist/`);}
     catch(err){toast("生成失败: "+err.message);}finally{e.target.disabled=false;}};
   $("#btnCheckAll").onclick=runAllChecks;
+  $("#btnReset").onclick=async()=>{
+    if(!confirm("清空本机所有做题进度？\n（只删除 progress.json，不影响题目文件与 dist/）"))return;
+    try{const r=await apiPost("/api/progress/reset",{confirm:true});
+      PG=r.progress;paintProgress();toast("进度已清空");viewHome();}
+    catch(err){toast("重置失败: "+err.message);}
+  };
 }
 
 async function runAllChecks(){
@@ -419,13 +482,13 @@ async function runAllChecks(){
   for(let i=0;i<CH.length;i++){
     const c=CH[i];
     box.innerHTML=`<div class="row tiny" style="justify-content:space-between">
-      <span><span class="spin"></span> 正在验证 <b style="color:var(--txt)">${esc(c.name)}</b>
+      <span><span class="spin"></span> 正在检查 <b style="color:var(--txt)">${esc(c.name)}</b>
         (${i+1}/${CH.length})</span><span class="muted">PASS ${pass} · FAIL ${fail}</span></div>
       <div class="bar" style="margin:8px 0"><i style="width:${i*100/CH.length}%"></i></div>
       <div id="qrows" style="max-height:240px;overflow:auto"></div>`;
     let st="ERR",msg="",sec=0;
     try{const r=await apiPost("/api/check/"+c.name);st=r.status;msg=r.msg;sec=r.seconds;
-      if(st==="PASS"){setDone(c.name,true);pass++;}else fail++;
+      if(st==="PASS")pass++;else fail++;
     }catch(e){fail++;msg=e.message;}
     rows.unshift(`<div class="row" style="justify-content:space-between;padding:3px 0;
         border-bottom:1px solid rgba(34,48,77,.5)">
@@ -436,9 +499,10 @@ async function runAllChecks(){
   }
   box.innerHTML=`<div class="row" style="justify-content:space-between">
       <span style="color:${fail?'var(--err)':'var(--ok)'};font-weight:600">
-        ${fail?'验证完成 · 有失败':'全部通过 🎉'} · PASS ${pass}/${CH.length}</span>
+        ${fail?'检查完成 · 有问题':'题目全部自洽 🎉'} · PASS ${pass}/${CH.length}</span>
       <button class="btn sm" id="qclose">关闭</button></div>
-    <div style="max-height:240px;overflow:auto;margin-top:8px">${rows.join("")}</div>`;
+    <div style="max-height:240px;overflow:auto;margin-top:8px">${rows.join("")}</div>
+    <div class="tiny muted" style="margin-top:6px">这只是检查出题材料是否自洽，不计入做题进度。</div>`;
   const b=$("#qclose");if(b)b.onclick=()=>box.innerHTML="<span class='muted'>验证结束。</span>";
 }
 
@@ -513,10 +577,10 @@ function viewChallenge(name){
   if(!c){$("#view").innerHTML='<div class="empty"><div class="big">404</div>题目不存在</div>';return;}
   $("#crumb").innerHTML=`<a href="#/challenges" style="color:var(--dim)">题目库</a>
     <span class="muted" style="margin:0 6px">/</span>${esc(c.name)}`;
-  const s=doneSet();
   const order=CH.slice().sort((a,b)=>ORDER.indexOf(a.category)-ORDER.indexOf(b.category)||a.points-b.points);
   const oi=order.findIndex(x=>x.name===name);
   const prev=oi>0?order[oi-1]:null, next=oi>=0&&oi<order.length-1?order[oi+1]:null;
+  const rec=recOf(name);
   $("#view").innerHTML=`
   <div class="card pad" style="margin-bottom:14px">
     <div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">
@@ -530,11 +594,34 @@ function viewChallenge(name){
           ${c.requires.length?`<span class="muted">依赖: ${c.requires.map(esc).join(", ")}</span>`:""}
         </div>
       </div>
-      <label class="row tiny" style="gap:6px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" id="mDone" ${s.has(name)?"checked":""} style="width:16px;height:16px;accent-color:var(--ok)">
-        已完成</label>
+      <div id="STATUSCHIP" style="white-space:nowrap">${statusChip(name)}</div>
     </div>
     <div class="tiny muted" style="margin-top:8px">考点: ${esc(c.technique)}</div>
+  </div>
+
+  <div class="card pad" id="SUBMITCARD" style="margin-bottom:14px">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px">
+      <div style="flex:1 1 320px;min-width:260px">
+        <h2 style="margin-bottom:4px">提交 flag</h2>
+        <div class="tiny muted" style="line-height:1.7">
+          算出 <span class="mono">flag{...}</span> 后填进来；<b style="color:var(--txt)">提交正确才算完成本题</b>。
+          格式严格匹配（大小写敏感，全角括号会自动纠正）。
+        </div>
+        <div class="row" style="margin-top:10px;gap:8px;flex-wrap:nowrap">
+          <input type="text" id="flagIn" class="flagin" placeholder="flag{...}"
+                 autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="btn primary" id="bSubmit">提交</button>
+        </div>
+        <div id="SUBMITMSG" class="tiny" style="margin-top:8px;min-height:1.2em"></div>
+      </div>
+      <div style="min-width:168px;text-align:right;line-height:1.9" id="SUBMITSTATBOX">
+        <div class="tiny muted">本题状态</div>
+        <div class="tiny" style="color:${rec.solved?'var(--ok)':'var(--txt)'};font-weight:600">${rec.solved
+          ? (rec.peeked?'已完成 · 看过答案':'已完成') : '未完成'}</div>
+        <div class="tiny muted" style="margin-top:2px">提交次数 <b style="color:var(--txt)">${rec.attempts||0}</b></div>
+        ${rec.solved_at?`<div class="tiny muted">完成于 ${esc(rec.solved_at)}</div>`:""}
+      </div>
+    </div>
   </div>
 
   <div class="tabs" id="TABS">
@@ -542,7 +629,7 @@ function viewChallenge(name){
     <button data-t="files">附件</button>
     <button data-t="hints">提示 (${c.hints_count})</button>
     <button data-t="wu">题解</button>
-    <button data-t="run">验证</button>
+    <button data-t="run">自检</button>
   </div>
 
   <div class="pane on" id="P-desc">
@@ -550,8 +637,8 @@ function viewChallenge(name){
     <div class="actions" style="margin-top:14px">
       <button class="btn primary" id="bGen">📥 领取题目 (gen)</button>
       <button class="btn" id="bHint">💡 看提示</button>
-      <button class="btn" id="bFlag">🔓 显示答案</button>
-      <button class="btn" id="bCheck">▶ 验证本题</button>
+      <button class="btn" id="bCheck">🔍 自检本题</button>
+      <button class="btn ghost" id="bGiveUp">🔓 放弃并看答案</button>
     </div>
     <div class="res" id="R"></div>
   </div>
@@ -607,8 +694,63 @@ function viewChallenge(name){
     <div>${next?`<a class="btn sm" href="#/c/${next.name}">${esc(next.name)} →</a>`:""}</div>
   </div>`;
 
-  $("#mDone").onchange=e=>{setDone(name,e.target.checked);
-    toast(e.target.checked?"已标记完成":"已取消完成");};
+  /* ---- 提交 flag：本题「完成」的唯一入口 ---- */
+  const inp=$("#flagIn"), msg=$("#SUBMITMSG"), sbtn=$("#bSubmit");
+  function paintSubmit(){
+    const r=recOf(name);
+    $("#STATUSCHIP").innerHTML=statusChip(name);
+    $("#SUBMITSTATBOX").innerHTML=`
+      <div class="tiny muted">本题状态</div>
+      <div class="tiny" style="color:${r.solved?'var(--ok)':'var(--txt)'};font-weight:600">
+        ${r.solved?(r.peeked?'已完成 · 看过答案':'已完成'):'未完成'}</div>
+      <div class="tiny muted" style="margin-top:2px">提交次数 <b style="color:var(--txt)">${r.attempts||0}</b></div>
+      ${r.solved_at?`<div class="tiny muted">完成于 ${esc(r.solved_at)}</div>`:""}`;
+  }
+  let submitting=false;
+  async function doSubmit(){
+    if(submitting)return;
+    submitting=true;sbtn.disabled=true;
+    msg.innerHTML='<span class="muted">判定中…</span>';
+    try{
+      const r=await apiPost("/api/submit/"+name,{flag:inp.value});
+      PG=r.progress||PG;paintProgress();
+      if(r.correct){
+        inp.classList.remove("bad");inp.classList.add("ok");
+        msg.innerHTML='<span style="color:var(--ok);font-weight:600">✔ flag 正确</span>'
+          +(r.first?' <span style="color:var(--acc2);font-weight:700">+'+r.awarded+' 分</span>'
+                   :' <span class="muted">（此前已完成，不重复计分）</span>')
+          +(r.peeked?' <span class="muted">· 本题看过答案，不计入「独立解出」</span>':"");
+        toast(r.first?"✔ 答对了！+"+r.awarded+" 分":"✔ 这题你已经完成过了");
+        $("#SUBMITCARD").style.borderColor="rgba(52,211,153,.45)";
+      }else{
+        inp.classList.remove("ok");inp.classList.add("bad");
+        msg.innerHTML='<span style="color:var(--err);font-weight:600">✘ '+esc(r.message||"flag 不正确")+'</span>'
+          +' <span class="muted">· 已提交 '+r.attempts+' 次</span>';
+        $("#SUBMITCARD").style.borderColor="";
+        inp.select();
+      }
+      paintSubmit();
+    }catch(e){
+      msg.innerHTML='<span style="color:var(--err)">请求失败: '+esc(e.message)+'</span>';
+    }finally{submitting=false;sbtn.disabled=false;}
+  }
+  sbtn.onclick=doSubmit;
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();doSubmit();}});
+  inp.addEventListener("input",()=>inp.classList.remove("bad","ok"));
+
+  /* ---- 放弃：给答案但只打「看过答案」标记，不算完成 ---- */
+  $("#bGiveUp").onclick=async()=>{
+    if(!confirm("这会显示本题的标准答案，并在进度里标记「看过答案」。\n"
+      + "本题之后仍可提交完成，但不再计入「独立解出」。\n\n确定要看吗？"))return;
+    try{
+      const r=await apiPost("/api/giveup/"+name);
+      PG=r.progress||PG;paintProgress();
+      const box=$("#R");box.className="res on";box.style.display="block";
+      box.innerHTML='<div class="hd"><span class="verdict ok">🔓 '+esc(r.flag)+'</span></div>'
+        +'<div class="tiny muted">已标记「看过答案」——把它填到上方提交框即可记为完成。</div>';
+      paintSubmit();
+    }catch(e){toast("读取失败: "+e.message);}
+  };
 
   $$("#TABS button").forEach(b=>b.onclick=()=>{
     $$("#TABS button").forEach(x=>x.classList.toggle("on",x===b));
@@ -618,6 +760,7 @@ function viewChallenge(name){
     if(b.dataset.t==="hints")loadHints();
   });
   $("#bHint").onclick=()=>$$("#TABS button")[2].click();
+  $("#bCheck").onclick=()=>$$("#TABS button")[4].click();
 
   /* ---- 验证: 展示完整过程 (实例目录 / 命令 / 输出 / 比对) ---- */
   let lastInst=null;
@@ -650,7 +793,7 @@ function viewChallenge(name){
           +'<pre class="code short">'+esc(out||"(空)")+(err?"\n--- stderr ---\n"+esc(err):"")+'</pre></details>':"")
         +(r.instance?'<div class="tiny muted" style="margin-top:10px">实例目录: <span class="mono">'
           +esc(r.instance)+'</span></div>':"");
-      if(pass){setDone(name,true);$("#mDone").checked=true;}
+      /* 自检只说明「题目材料与参考题解自洽」，不改动做题进度 */
     }catch(err){
       box.innerHTML='<div class="vres bad"><span class="vbadge">✘ 请求失败</span>'
         +'<span class="tiny">'+esc(err.message)+'</span></div>';
@@ -730,13 +873,6 @@ function viewChallenge(name){
     try{const r=await apiPost("/api/gen/"+name);toast("已生成 → "+r.dest);loadFiles();}
     catch(err){toast("生成失败: "+err.message);}finally{if(btn)btn.disabled=false;}}
   $("#bGen").onclick=e=>gen(e.target);
-
-  $("#bFlag").onclick=async()=>{
-    const r=await apiGet("/api/flag/"+name);
-    const box=$("#R");box.className="res on";box.style.display="block";
-    box.innerHTML=`<div class="hd"><span class="verdict ok">🔓 ${esc(r.flag)}</span></div>
-      <div class="tiny muted">答案已显示——建议先自己尝试。</div>`;
-  };
 
   let hints=null,shown=0;
   async function loadHints(){
@@ -866,7 +1002,7 @@ async function boot(){
     $("#view").innerHTML='<div class="empty"><div class="big">⚠</div>无法加载题目索引<br>'
       +'<span class="tiny">'+esc(e.message)+'</span></div>';return;
   }
-  refreshProgress();
+  await refreshProgress();
   try{RES=await apiGet("/api/resources");}catch(e){}
   route();
 }

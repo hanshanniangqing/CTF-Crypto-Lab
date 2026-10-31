@@ -128,7 +128,7 @@ class UI:
         if self.rich:
             self.console.print(f"[{color}]{icon}[/{color}] {msg}")
         else:
-            print(f"{_c({'green':32,'yellow':33,'red':31,'cyan':36}[color], icon)} {msg}")
+            print(f"{_c({'green':32,'yellow':33,'red':31,'cyan':36}[color], icon)} {_strip(msg)}")
 
     # ---------- 进度 ----------
     def progress(self, total_desc=""):

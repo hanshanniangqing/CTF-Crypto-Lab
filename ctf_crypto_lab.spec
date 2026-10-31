@@ -52,6 +52,7 @@ for doc in ("README.md", "CONVENTIONS.md", "requirements.txt"):
         datas.append((str(p), "."))
 
 hiddenimports = [
+    "progress",  # 顶层模块, 判题与进度; 显式声明避免懒加载漏收
     "Crypto", "Crypto.Cipher", "Crypto.Cipher.AES", "Crypto.Cipher.DES",
     "Crypto.Cipher.DES3", "Crypto.Cipher.PKCS1_OAEP", "Crypto.Hash", "Crypto.Hash.MD4",
     "Crypto.PublicKey", "Crypto.PublicKey.RSA", "Crypto.Util", "Crypto.Util.number",

@@ -8,7 +8,9 @@ ctf.py — CTF Crypto Lab 平台 CLI (v2: 富文本 / 交互菜单 / Web 控制�
   python ctf.py list            题目一览 (富文本表格)
   python ctf.py info <name>     题目详情
   python ctf.py hint <name> [n] 逐步提示
-  python ctf.py flag <name>     查看答案
+  python ctf.py flag <name>     查看答案 (不计入完成)
+  python ctf.py submit <name> [--flag 'flag{...}']   提交 flag 判题 (唯一记完成的方式)
+  python ctf.py progress        做题进度 (分类统计 / 已完成列表)
   python ctf.py gen <name|all>  生成玩家文件到 dist/
   python ctf.py check <name|all> [--verbose]   运行解题脚本验证 (带进度条)
   python ctf.py writeup <name>  查看题解
@@ -42,7 +44,7 @@ from ui import UI  # noqa: E402
 
 INDEX_PATH = LAB / "challenges" / "index.json"
 
-VERSION = "CTF Crypto Lab v3.0"
+VERSION = "CTF Crypto Lab v3.1"
 
 CATEGORY_ORDER = ["classical", "symmetric", "stream", "rsa", "pubkey", "hash", "lattice", "cracking"]
 CATEGORY_CN = {
@@ -95,7 +97,8 @@ def cmd_list(args):
     n = len(index)
     the.rule()
     the.console.print(f"  [bold]共 {n} 题[/bold]  ·  [cyan]python ctf.py gen all[/cyan] 领取全部  "
-                      f"·  [cyan]python ctf.py check all[/cyan] 一键验证  ·  [cyan]python ctf.py serve[/cyan] 图形界面")
+                      f"·  [cyan]python ctf.py submit <题目>[/cyan] 提交 flag  "
+                      f"·  [cyan]python ctf.py serve[/cyan] 图形界面")
 
 
 def cmd_info(args):
@@ -119,6 +122,7 @@ def cmd_info(args):
     else:
         the.warn("材料未生成: python ctf.py gen " + c["name"])
     the.info(f"提示: python ctf.py hint {c['name']} 1")
+    the.info(f"完成: python ctf.py submit {c['name']}   (填入正确 flag 才算完成)")
 
 
 def cmd_hint(args):
@@ -139,12 +143,91 @@ def cmd_hint(args):
 
 
 def cmd_flag(args):
+    import progress as PG
     index, _ = load_index()
     c = index.get(args.name)
     if not c:
         U.err(f"未知题目: {args.name}")
         sys.exit(1)
-    args.ui_obj.panel(f"[bold green]{c['flag']}[/bold green]", title=f"{c['name']} 答案", color="green")
+    # 与网页端一致：看答案就打「看过答案」标记，避免白嫖「独立解出」
+    PG.peek(c)
+    args.ui_obj.panel(
+        f"[bold green]{c['flag']}[/bold green]\n\n"
+        f"[dim]已标记「看过答案」(不计入独立解出)。看答案不会记为完成 —— "
+        f"要完成本题请在题面页或 `python ctf.py submit {c['name']}` 里提交 flag。[/dim]",
+        title=f"{c['name']} 答案", color="green")
+
+
+def cmd_submit(args):
+    """提交 flag —— 唯一能把题目记为完成的入口"""
+    import progress as PG
+    index, _ = load_index()
+    c = index.get(args.name)
+    if not c:
+        U.err(f"未知题目: {args.name}   (python ctf.py list 查看全部)")
+        sys.exit(1)
+    the = args.ui_obj
+    the.panel(f"[bold]{c['name']}[/bold]  [dim]{CATEGORY_CN[c['category']]} · "
+              f"{c['difficulty']} · {c['points']} 分[/dim]\n\n{c['description']}",
+              title="提交 flag", color="bright_cyan")
+
+    raw = args.flag
+    if raw is None:
+        try:
+            raw = input("  flag > ")
+        except (EOFError, KeyboardInterrupt):
+            the.info("已取消")
+            return
+
+    r = PG.submit(c, raw)
+    if not r["correct"]:
+        the.err(r["message"])
+        the.info(f"已提交 {r['attempts']} 次 · 提示: python ctf.py hint {c['name']} 1")
+        sys.exit(1)
+    if r["first"]:
+        the.ok(f"flag 正确   +{r['awarded']} 分")
+    else:
+        the.ok("flag 正确 (本题此前已完成, 不重复计分)")
+    if r["peeked"]:
+        the.warn("本题看过答案 —— 仍算完成, 但不计入「独立解出」")
+    s = PG.stats(index)
+    the.info(f"进度 {s['solved']}/{s['total']} 题 · "
+             f"{s['solved_points']}/{s['total_points']} 分 · 独立解出 {s['clean']} 题")
+
+
+def cmd_progress(args):
+    """做题进度总览"""
+    import progress as PG
+    index, _ = load_index()
+    the = args.ui_obj
+    rows = []
+    for r in PG.by_category(index, CATEGORY_ORDER):
+        cat = r["category"]
+        pct = f"{r['solved'] * 100 // r['total']}%" if r["total"] else "—"
+        rows.append([CATEGORY_CN.get(cat, cat), f"{r['solved']}/{r['total']}", pct,
+                     f"{r['solved_points']}/{r['points']}"])
+    the.table("分类进度", ["分类", "已完成", "比例", "得分"], rows)
+
+    s = PG.stats(index)
+    the.panel(
+        f"[bold]{s['solved']}[/bold]/{s['total']} 题   "
+        f"[bold]{s['solved_points']}[/bold]/{s['total_points']} 分   "
+        f"[dim]完成度 {s['percent']}%[/dim]\n"
+        f"独立解出 [green]{s['clean']}[/green] 题"
+        + (f"   [yellow]看过答案 {s['peeked']}[/yellow] 题" if s["peeked"] else "")
+        + f"   [dim]累计提交 {s['attempts']} 次[/dim]",
+        title="我的进度", color="bright_cyan")
+
+    recs = PG.load()["records"]
+    done = [(n, r) for n, r in recs.items() if r.get("solved") and n in index]
+    if not done:
+        the.info("还没有完成的题目 —— python ctf.py submit <题目> 提交 flag")
+        return
+    done.sort(key=lambda kv: (kv[1].get("solved_at") or ""))
+    the.table("已完成的题目", ["题目", "分值", "提交次数", "完成时间", "备注"],
+              [[n, str(index[n]["points"]), str(r.get("attempts") or 0),
+                r.get("solved_at") or "—",
+                "看过答案" if r.get("peeked") else ""] for n, r in done])
 
 
 def cmd_writeup(args):
@@ -439,12 +522,13 @@ def cmd_ui(args):
         if the.rich:
             the.console.print("[bold bright_cyan]  🔐 CTF Crypto Lab[/bold bright_cyan]  "
                               "[dim]密码学方向本地训练场[/dim]\n")
-        rows = [["1", "题目库", "浏览 / 领取 / 验证单题"],
-                ["2", "一键验证", "check all — 全量运行题解并核对 flag"],
-                ["3", "资源探测", "John the Ripper / rockyou / hashcat / 7-Zip"],
-                ["4", "题目站 (Web)", "多页面网页界面 — 题面 / 附件 / 提示 / 题解 / 验证"],
-                ["5", "密码工具箱 (Web)", "独立工具界面 — 编码 / 古典 / RSA / 格攻击 等"],
-                ["6", "题目一览", "list 表格视图"],
+        rows = [["1", "题目库", "浏览 / 领取 / 提交 flag"],
+                ["2", "我的进度", "已完成 / 得分 / 分类统计"],
+                ["3", "自洽性检查", "check all — 跑参考题解核对题目材料 (不计进度)"],
+                ["4", "资源探测", "John the Ripper / rockyou / hashcat / 7-Zip"],
+                ["5", "题目站 (Web)", "多页面网页界面 — 题面 / 附件 / 提示 / 提交 flag"],
+                ["6", "密码工具箱 (Web)", "独立工具界面 — 编码 / 古典 / RSA / 格攻击 等"],
+                ["7", "题目一览", "list 表格视图"],
                 ["0", "退出", ""]]
         the.table(None, ["#", "功能", "说明"], rows)
         choice = input("  选择 > ").strip()
@@ -478,13 +562,15 @@ def cmd_ui(args):
                     c = index[nm]
                     cmd_info(_NS(name=nm, ui_obj=the))
                     while True:
-                        the.info(f"[b]返回  [g]gen 领取  [c]check 验证  [h]hint 提示  "
-                                 f"[w]writeup 题解  [f]flag 答案  [o]打开目录")
+                        the.info(f"[b]返回  [g]gen 领取  [s]submit 提交flag  [c]check 自检  "
+                                 f"[h]hint 提示  [w]writeup 题解  [f]看答案(不计分)  [o]打开目录")
                         a = input(f"  [{nm}] > ").strip().lower()
                         if a == "b":
                             break
                         elif a == "g":
                             cmd_gen(_NS(name=nm, out=None, ui_obj=the))
+                        elif a == "s":
+                            cmd_submit(_NS(name=nm, flag=None, ui_obj=the))
                         elif a == "c":
                             cmd_check(_NS(name=nm, verbose=False, ui_obj=the))
                         elif a == "h":
@@ -502,14 +588,16 @@ def cmd_ui(args):
                         else:
                             the.warn("无效输入")
         elif choice == "2":
-            cmd_check(_NS(name="all", verbose=False, ui_obj=the))
+            cmd_progress(_NS(ui_obj=the))
         elif choice == "3":
-            cmd_doctor(_NS(rescan=False, ui_obj=the))
+            cmd_check(_NS(name="all", verbose=False, ui_obj=the))
         elif choice == "4":
-            cmd_serve(_NS(port=8787, no_browser=False, ui_obj=the))
+            cmd_doctor(_NS(rescan=False, ui_obj=the))
         elif choice == "5":
-            cmd_toolkit(_NS(port=8788, no_browser=False, ui_obj=the))
+            cmd_serve(_NS(port=8787, no_browser=False, ui_obj=the))
         elif choice == "6":
+            cmd_toolkit(_NS(port=8788, no_browser=False, ui_obj=the))
+        elif choice == "7":
             cmd_list(_NS(ui_obj=the))
         else:
             the.warn("无效输入")
@@ -564,7 +652,11 @@ def main():
     p = sub.add_parser("info", help="题目详情"); p.add_argument("name"); p.set_defaults(fn=cmd_info, ui_obj=the)
     p = sub.add_parser("hint", help="逐步提示"); p.add_argument("name")
     p.add_argument("level", nargs="?", type=int); p.set_defaults(fn=cmd_hint, ui_obj=the)
-    p = sub.add_parser("flag", help="查看答案"); p.add_argument("name"); p.set_defaults(fn=cmd_flag, ui_obj=the)
+    p = sub.add_parser("flag", help="查看答案 (不计入完成)"); p.add_argument("name"); p.set_defaults(fn=cmd_flag, ui_obj=the)
+    p = sub.add_parser("submit", help="提交 flag 判题 (唯一记完成的方式)")
+    p.add_argument("name"); p.add_argument("--flag", default=None, help="直接给出 flag, 不进交互")
+    p.set_defaults(fn=cmd_submit, ui_obj=the)
+    sub.add_parser("progress", help="查看做题进度").set_defaults(fn=cmd_progress, ui_obj=the)
     p = sub.add_parser("gen", help="生成玩家文件"); p.add_argument("name")
     p.add_argument("--out", default=None); p.set_defaults(fn=cmd_gen, ui_obj=the)
     p = sub.add_parser("check", help="验证解题脚本"); p.add_argument("name")
