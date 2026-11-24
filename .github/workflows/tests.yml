@@ -20,6 +20,8 @@ jobs:
           pip install pycryptodome rich sympy cryptography
       - name: 工具库单元测试
         run: python tools/test_ctfk.py
+      - name: 零基础学习与工具接口回归
+        run: python tools/test_learning.py
       - name: 生成题目材料
         run: |
           for f in tools/build_*.py; do

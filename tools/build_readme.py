@@ -36,7 +36,11 @@ def main():
     else:
         # 已插入过 → 替换旧表 (从表头到表尾)
         import re
-        text = re.sub(r"\| # \| 题目 \| 分类 \| 难度 \| 分值 \| 考点 \|\n(\|[-| ]+\n\|[^\n]*\n?)+", table, text)
+        text, count = re.subn(
+            r"^\| # \| 题目 \| 分类 \| 难度 \| 分值 \| 考点 \|\n(?:\|[^\n]*(?:\n|$))+",
+            table + "\n", text, count=1, flags=re.MULTILINE)
+        if count != 1:
+            raise SystemExit("未找到题目总表，请检查 README 表头")
         readme.write_text(text, encoding="utf-8")
         print("table replaced")
 

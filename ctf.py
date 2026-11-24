@@ -44,7 +44,7 @@ from ui import UI  # noqa: E402
 
 INDEX_PATH = LAB / "challenges" / "index.json"
 
-VERSION = "CTF Crypto Lab v3.1.1"
+VERSION = "CTF Crypto Lab v3.2"
 
 CATEGORY_ORDER = ["classical", "symmetric", "stream", "rsa", "pubkey", "hash", "lattice", "cracking"]
 CATEGORY_CN = {
@@ -122,6 +122,8 @@ def cmd_info(args):
     else:
         the.warn("材料未生成: python ctf.py gen " + c["name"])
     the.info(f"提示: python ctf.py hint {c['name']} 1")
+    import learning
+    the.panel(learning.challenge_knowledge(c)['markdown'], title="本题知识点", color="bright_cyan")
     the.info(f"完成: python ctf.py submit {c['name']}   (填入正确 flag 才算完成)")
 
 

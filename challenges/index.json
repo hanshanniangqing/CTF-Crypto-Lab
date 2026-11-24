@@ -1,6 +1,126 @@
 {
   "challenges": [
     {
+      "name": "intro-hex",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 10,
+      "technique": "Hex 字节与文本",
+      "description": "把附件中的十六进制解码一次，找到 flag。",
+      "hints": [
+        "Hex 每两位是一字节，选择 Hex 工具的解码方向。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{hex_first_step}",
+      "timeout": 30,
+      "beginner_order": 1
+    },
+    {
+      "name": "intro-base64",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 10,
+      "technique": "单层 Base64 解码",
+      "description": "附件只经过一次 Base64 编码，请还原文本。",
+      "hints": [
+        "Base 工具选择 Base64 与解码。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{base64_first_step}",
+      "timeout": 30,
+      "beginner_order": 2
+    },
+    {
+      "name": "intro-ascii",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 10,
+      "technique": "十进制 ASCII 转文本",
+      "description": "附件每个十进制数字对应一个字符，请按顺序还原。",
+      "hints": [
+        "字节转换工具选择十进制字节解码。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{ascii_first_step}",
+      "timeout": 30,
+      "beginner_order": 3
+    },
+    {
+      "name": "intro-binary",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 10,
+      "technique": "二进制字节转文本",
+      "description": "附件每组 8 位二进制对应一个字符，请还原文本。",
+      "hints": [
+        "字节转换工具选择二进制字节解码。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{binary_first_step}",
+      "timeout": 30,
+      "beginner_order": 4
+    },
+    {
+      "name": "intro-rot13",
+      "category": "classical",
+      "difficulty": "入门",
+      "points": 10,
+      "technique": "固定 ROT13 解密",
+      "description": "附件英文字母都移动了 13 位。数字、括号、下划线保持不变。",
+      "hints": [
+        "凯撒工具选择解密，位移填 13。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{rot13_first_step}",
+      "timeout": 30,
+      "beginner_order": 5
+    },
+    {
+      "name": "intro-xor",
+      "category": "stream",
+      "difficulty": "入门",
+      "points": 20,
+      "technique": "已知单字节密钥 XOR",
+      "description": "密文以 Hex 保存；密钥是十六进制 2a。将每个密文字节与 0x2a 异或。",
+      "hints": [
+        "手动 XOR 工具中密文与密钥均选 Hex；密钥填 2a。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{xor_first_step}",
+      "timeout": 30,
+      "beginner_order": 6
+    },
+    {
+      "name": "intro-hash",
+      "category": "hash",
+      "difficulty": "入门",
+      "points": 20,
+      "technique": "有限候选 SHA-256 匹配",
+      "description": "附件第一行是 SHA-256 摘要，其余行是候选口令。找到命中的口令，提交 flag{口令}。",
+      "hints": [
+        "依次计算候选词的 SHA-256；不要把行末换行加入口令。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{sunshine}",
+      "timeout": 30,
+      "beginner_order": 7
+    },
+    {
+      "name": "intro-mod",
+      "category": "rsa",
+      "difficulty": "入门",
+      "points": 20,
+      "technique": "取模与 ASCII",
+      "description": "附件第一行是模数，其余数字按顺序取模，再把余数作为十进制 ASCII 转文本。",
+      "hints": [
+        "例如 321 mod 256 = 65，对应 A；先取余再转换字节。",
+        "先读本题知识点，再用工具独立完成一次转换。"
+      ],
+      "flag": "flag{mod_first_step}",
+      "timeout": 30,
+      "beginner_order": 8
+    },
+    {
       "name": "base-nested",
       "category": "classical",
       "difficulty": "入门",

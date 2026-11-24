@@ -7,13 +7,11 @@
 ## 利用思路
 1. ssh2john.py id_rsa > hash.txt (john jumbo 自带该转换脚本)。
 2. john --wordlist=rockyou hash.txt 爆破口令 (本题口令在 rockyou 前 10 万行)。
-3. openssl rsa -in id_rsa -passin pass:<口令> 解出明文私钥。
-4. RSA.import_key 导入私钥, RSA-OAEP 解密 challenge.txt (hex) 得 flag。
+3. 用项目已依赖的 PyCryptodome 和口令导入 PEM 私钥，无需额外安装 OpenSSL。
+4. RSA-OAEP 解密 challenge.txt (hex) 得 flag。
 
 ## 关键代码
-subprocess.run(["openssl", "rsa", "-in", "id_rsa", "-passin", "pass:" + pw,
-                "-out", "plain.pem"])
-priv = RSA.import_key(open("plain.pem").read())
+priv = RSA.import_key(open("id_rsa", "rb").read(), passphrase=pw)
 flag = PKCS1_OAEP.new(priv).decrypt(bytes.fromhex(open("challenge.txt").read()))
 
 ## 防御建议
@@ -36,12 +34,8 @@ from Crypto.Cipher import PKCS1_OAEP  # noqa: E402
 
 
 def decrypt_pem(pem_path: Path, pw: str) -> str:
-    r = subprocess.run(["openssl", "rsa", "-in", str(pem_path).replace("\\", "/"),
-                        "-passin", "pass:" + pw],
-                       capture_output=True, text=True, timeout=60)
-    assert r.returncode == 0 and ("BEGIN PRIVATE KEY" in r.stdout
-                                  or "BEGIN RSA PRIVATE KEY" in r.stdout), "口令验证失败"
-    return r.stdout
+    key = RSA.import_key(pem_path.read_bytes(), passphrase=pw)
+    return key.export_key(format="PEM").decode("ascii")
 
 
 def via_john(res, workdir):

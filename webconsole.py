@@ -27,6 +27,7 @@ sys.path.insert(0, str(LAB))
 from webbase import BASE_CSS, JS_HELPERS  # noqa: E402
 import instances as INST  # noqa: E402
 import progress as PG  # noqa: E402
+import learning
 
 TOOLKIT_PORT = None    # 由 `ctf.py web` 注入真实端口；None 时运行时探测
 
@@ -51,7 +52,7 @@ def _version():
         from ctf import VERSION as V
         return V.replace("CTF Crypto Lab ", "").lstrip("vV")
     except Exception:
-        return "3.1"
+        return "3.2"
 
 
 def _index():
@@ -176,12 +177,18 @@ class Handler(BaseHTTPRequestHandler):
                                       if INST.server_script(c) else None),
                     "oracle": bool(INST.oracle_script(c)),
                     "run_hint": INST.run_hint(c),
+                    "beginner_order": c.get("beginner_order"),
+                    "knowledge": learning.challenge_knowledge(c),
                 })
             return self._json({"challenges": out,
                                "version": _version(),
                                "cats": [{"k": k, "cn": CAT_CN[k], "icon": CAT_ICON[k],
                                          "color": CAT_COLOR[k]} for k in ORDER],
                                "wordlist": self._wordlist_stats()})
+
+        if path == "/api/learn":
+            return self._json({"markdown": learning.WELCOME,
+                               "foundations": learning.FOUNDATIONS})
 
         m = re.match(r"^/api/hints/([\w\-]+)$", path)
         if m:
@@ -414,6 +421,7 @@ PAGE_RAW = r"""<!DOCTYPE html>
     <div class="brand"><span class="dot"></span><div>CTF Crypto Lab<small>密码学本地训练场 · <span id="brandVer">v—</span></small></div></div>
     <nav class="nav" id="nav">
       <a href="#/" data-r="home"><span class="ic">◈</span><span class="tx">概览</span></a>
+      <a href="#/learn" data-r="learn"><span class="ic">🌱</span><span class="tx">零基础学习</span></a>
       <a href="#/challenges" data-r="ch"><span class="ic">▤</span><span class="tx">题目库</span></a>
       <a href="#/resources" data-r="res"><span class="ic">🩺</span><span class="tx">资源探测</span></a>
       <div class="grp">工具</div>
@@ -518,7 +526,8 @@ function viewHome(){
         <div class="muted tiny">${CH.length} 道题 · ${total} 分 · 古典密码 → 格密码 / 口令破解实战</div>
       </div>
       <div class="row">
-        <button class="btn primary" id="btnGenAll">📥 领取全部题目</button>
+        <a class="btn primary" href="#/learn">🌱 从零开始</a>
+        <button class="btn" id="btnGenAll">📥 领取全部题目</button>
         <button class="btn" id="btnCheckAll">🔍 自洽性检查</button>
         <button class="btn ghost" id="btnReset">↺ 重置进度</button>
       </div>
@@ -686,7 +695,9 @@ function viewChallenge(name){
   if(!c){$("#view").innerHTML='<div class="empty"><div class="big">404</div>题目不存在</div>';return;}
   $("#crumb").innerHTML=`<a href="#/challenges" style="color:var(--dim)">题目库</a>
     <span class="muted" style="margin:0 6px">/</span>${esc(c.name)}`;
-  const order=CH.slice().sort((a,b)=>ORDER.indexOf(a.category)-ORDER.indexOf(b.category)||a.points-b.points);
+  const order=c.beginner_order
+    ?CH.filter(x=>x.beginner_order).sort((a,b)=>a.beginner_order-b.beginner_order)
+    :CH.slice().sort((a,b)=>ORDER.indexOf(a.category)-ORDER.indexOf(b.category)||a.points-b.points);
   const oi=order.findIndex(x=>x.name===name);
   const prev=oi>0?order[oi-1]:null, next=oi>=0&&oi<order.length-1?order[oi+1]:null;
   const rec=recOf(name);
@@ -735,6 +746,7 @@ function viewChallenge(name){
 
   <div class="tabs" id="TABS">
     <button data-t="desc" class="on">题目</button>
+    <button data-t="knowledge">本题知识点</button>
     <button data-t="hints">提示 (${c.hints_count})</button>
     <button data-t="wu">题解</button>
     <button data-t="run">自检</button>
@@ -742,6 +754,7 @@ function viewChallenge(name){
 
   <div class="pane on" id="P-desc">
     <div class="card pad" style="line-height:1.85;font-size:.95rem">${esc(c.description)}</div>
+    <div class="card pad" style="margin-top:12px">🌱 第一次接触？先点击“本题知识点”，理解原理后再处理下方附件。</div>
     <div class="actions" style="margin-top:14px">
       <button class="btn" id="bGen">📥 复制到 dist/</button>
       <button class="btn" id="bHint">💡 看提示</button>
@@ -762,6 +775,12 @@ function viewChallenge(name){
     </div>
   </div>
 
+  <div class="pane" id="P-knowledge">
+    <div class="card pad">${md(c.knowledge.markdown)}
+      <div class="actions"><a class="btn" href="#/learn">基础知识与学习路线</a>
+      ${TK&&TK.ok?`<a class="btn primary" target="_blank" rel="noopener" href="${esc(TK.url)}/#/t/${esc(c.knowledge.tool)}">打开相关工具</a>`:'<span class="tiny muted">启动工具箱：python ctf.py toolkit</span>'}</div>
+    </div>
+  </div>
   <div class="pane" id="P-hints">
     <div class="card">
       <div class="row" style="justify-content:space-between">
@@ -867,8 +886,8 @@ function viewChallenge(name){
     if(b.dataset.t==="wu")loadWu();
     if(b.dataset.t==="hints")loadHints();
   });
-  $("#bHint").onclick=()=>$$("#TABS button")[1].click();
-  $("#bCheck").onclick=()=>$$("#TABS button")[3].click();
+  $("#bHint").onclick=()=>$('#TABS [data-t="hints"]').click();
+  $("#bCheck").onclick=()=>$('#TABS [data-t="run"]').click();
 
   /* ---- 验证: 展示完整过程 (实例目录 / 命令 / 输出 / 比对) ---- */
   let lastInst=null;
@@ -1106,8 +1125,25 @@ async function viewRes(){
 
 /* ---------------- 路由 ---------------- */
 const ORDER=["classical","symmetric","stream","rsa","pubkey","hash","lattice","cracking"];
+async function viewLearn(){
+  setNav("learn");$("#crumb").textContent="零基础学习";
+  $("#view").innerHTML='<div class="card pad">加载学习内容…</div>';
+  try{
+    const d=await apiGet("/api/learn");
+    if(location.hash!=="#/learn")return;
+    const steps=CH.filter(c=>c.beginner_order).sort((a,b)=>a.beginner_order-b.beginner_order);
+    $("#view").innerHTML=`<div class="card pad">${md(d.markdown)}</div>
+      <h2 style="margin:18px 0 12px">8 道起步题 · 按顺序练习</h2>
+      <div class="grid">${steps.map(c=>`<a class="card pad" href="#/c/${c.name}" style="color:inherit;text-decoration:none">
+        <b>${c.beginner_order}. ${esc(c.technique)}</b><p>${esc(c.description)}</p>
+        <span class="tiny muted">${c.points} 分 · ${doneSet().has(c.name)?'已完成':'约 5～10 分钟'}</span></a>`).join("")}</div>
+      <h2 style="margin:18px 0 12px">分类基础知识</h2>
+      ${Object.entries(d.foundations).map(([k,v])=>`<details class="card pad" style="margin-bottom:10px"><summary>${esc((CIB[k]||{}).cn||k)}</summary><p style="line-height:1.9">${esc(v)}</p></details>`).join("")}`;
+  }catch(e){if(location.hash==="#/learn")$("#view").innerHTML='<div class="card pad">加载失败：'+esc(e.message)+'</div>';}
+}
 function route(){
   const h=location.hash.replace(/^#/,"")||"/";
+  if(h==="/learn"){viewLearn();return;}
   if(h.startsWith("/c/")){viewChallenge(decodeURIComponent(h.slice(3)));return;}
   if(h.startsWith("/challenges")){viewList();return;}
   if(h.startsWith("/resources")){viewRes();return;}

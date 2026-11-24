@@ -401,12 +401,7 @@ def t_railfence(f):
     rows = [""] * r
     for i, ch in enumerate(s):
         rows[pattern[i % len(pattern)]] += ch
-    out, idx = [], [pattern[i % len(pattern)] for i in range(len(s))]
-    ptr = [0] * r
-    for k in idx:
-        out.append(rows[k][ptr[k]])
-        ptr[k] += 1
-    return ok("".join(out))
+    return ok("".join(rows))
 
 
 def t_substitution(f):
@@ -1186,6 +1181,9 @@ TOOLS = [
                 F("s", "目标和 s")], "fn": t_knapsack},
 ]
 
+from beginner_tools import register as register_beginner_tools
+from tool_guides import guide as tool_guide
+TOOLS.extend(register_beginner_tools(F, SEL))
 TOOL_MAP = {t["id"]: t for t in TOOLS}
 GROUPS = []
 for _t in TOOLS:
@@ -1206,6 +1204,27 @@ EXAMPLES = {
     "hnp": {"p": "", "B": "", "samples": "a1 c1\na2 c2"},
     "knapsack": {"pubkey": "", "s": ""},
 }
+
+# 示例都使用独立、小规模数据，避免把占位符当作可执行样例。
+for _id in ('vigenere', 'mt', 'hnp', 'knapsack'):
+    EXAMPLES.pop(_id, None)
+EXAMPLES.update({
+    'hex': {'mode':'dec', 'data':'48656c6c6f'},
+    'base': {'mode':'dec', 'scheme':'64', 'data':'SGVsbG8='},
+    'url': {'data':'Hello%20CTF%21'},
+    'morse': {'mode':'dec', 'data':'.... .. / -.-. - ..-.'},
+    'bytes': {'mode':'dec', 'radix':'10', 'data':'72 101 108 108 111'},
+    'atbash': {'data':'SVOOL'},
+    'bacon': {'mode':'dec', 'data':'AABBB AABAA ABABB ABABB ABBBA'},
+    'frequency': {'data':'THIS IS A SIMPLE ENGLISH MESSAGE FOR FREQUENCY ANALYSIS'},
+    'xor-manual': {'data':'624f464645', 'format':'hex', 'key':'2a', 'key_format':'hex'},
+    'aes': {'mode':'dec','cipher_mode':'ECB','format':'hex','data':'69c4e0d86a7b0430d8cdb78070b4c55a',
+            'key':'000102030405060708090a0b0c0d0e0f','key_format':'hex','iv':'','padding':'none'},
+    'rsa-basic': {'p':'61','q':'53','e':'17','c':'2790'},
+    'rsa-factor': {'n':'3233'},
+    'vigenere': {'mode':'dec','key':'LEMON','data':'LXFOPVEFRNHR'},
+    'railfence': {'mode':'enc','rails':'3','data':'WEAREDISCOVERED'},
+})
 
 
 # ======================================================================
@@ -1240,6 +1259,7 @@ class Handler(BaseHTTPRequestHandler):
             for t in TOOLS:
                 items.append({"id": t["id"], "group": t["group"], "name": t["name"],
                               "desc": t["desc"], "fields": t["fields"],
+                              "guide": tool_guide(t),
                               "example": EXAMPLES.get(t["id"])})
             try:
                 import resources as RES
@@ -1349,6 +1369,11 @@ function viewHome(){
         <div class="row"><a class="btn" href="#/docs">使用说明</a></div>
       </div>
     </div>
+    <div class="card pad" style="margin-bottom:16px">
+      <h2>🌱 第一次使用</h2>
+      <p>先分清文本、Hex 字节与整数。进入工具后先读“使用说明与知识点”，点击“填入示例”体验，再处理题目材料。</p>
+      <div class="actions"><a class="btn" href="#/t/bytes">字节与进制</a><a class="btn" href="#/t/base">Base64</a><a class="btn" href="#/t/xor-manual">已知密钥 XOR</a><a class="btn" href="#/docs">完整使用说明</a></div>
+    </div>
     ${GROUPS.map(g=>`<div style="margin-bottom:20px">
       <div class="row" style="justify-content:space-between;margin-bottom:9px">
         <h2>${ICON[g]||"•"} ${esc(g)}</h2>
@@ -1377,6 +1402,7 @@ function viewTool(id){
         ${t.example?`<button class="btn sm" id="bEx">填入示例</button>`:""}
       </div>
       <div id="FORM" style="margin-top:16px"></div>
+      <details style="margin:14px 0" open><summary>使用说明与知识点</summary>${md(t.guide)}</details>
       <div class="actions">
         <button class="btn primary" id="bRun">▶ 运行 <span class="tiny" style="opacity:.7">(Ctrl+Enter)</span></button>
         <button class="btn ghost" id="bClear">清空</button>
